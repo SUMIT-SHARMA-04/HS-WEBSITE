@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Owner Dashboard | High Spirits</title>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --gold: #D4AF37; --gold-light: #F3E5AB; --gold-dark: #AA8222;
+            --bg-dark: #121212; --bg-panel: #1e1e1e; --text-main: #f5f5f5;
+            --text-muted: #a0a0a0; --border: rgba(212, 175, 55, 0.2);
+            --veg-green: #4ade80; --danger: #ef4444; --info: #3b82f6;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Poppins', sans-serif; background-color: var(--bg-dark); color: var(--text-main); display: flex; height: 100vh; overflow: hidden; }
+        h1, h2, h3 { font-family: 'Playfair Display', serif; color: var(--gold); }
+
+        .sidebar { width: 250px; background: var(--bg-panel); border-right: 2px solid var(--gold-dark); display: flex; flex-direction: column; padding: 2rem 0; z-index: 10;}
+        .sidebar-brand { text-align: center; margin-bottom: 2rem; padding: 0 1rem; }
+        .sidebar-brand h1 { font-size: 1.8rem; text-transform: uppercase; letter-spacing: 2px; }
+        .sidebar-brand p { color: var(--text-muted); font-size: 0.8rem; letter-spacing: 1px; }
+        
+        .nav-item { padding: 1rem 2rem; color: var(--text-main); text-decoration: none; display: block; border-left: 4px solid transparent; cursor: pointer; transition: 0.3s; }
+        .nav-item:hover, .nav-item.active { background: rgba(212, 175, 55, 0.1); border-left-color: var(--gold); color: var(--gold); }
+
+        .main-content { flex-grow: 1; padding: 2rem; overflow-y: auto; background: linear-gradient(rgba(18, 18, 18, 0.95), rgba(18, 18, 18, 0.95)), url('https://www.transparenttextures.com/patterns/food.png'); }
+        
+        .panel { display: none; animation: fadeIn 0.4s ease; } .panel.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem; flex-wrap: wrap; gap: 1rem;}
+        
+        table { width: 100%; border-collapse: collapse; background: var(--bg-panel); border-radius: 8px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        th, td { padding: 1rem; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        th { color: var(--gold-light); font-weight: 600; text-transform: uppercase; font-size: 0.85rem; letter-spacing: 1px; background: rgba(0,0,0,0.2); }
+        tr:hover { background: rgba(255,255,255,0.02); }
+        
+        .status { padding: 0.3rem 0.8rem; border-radius: 50px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase;}
+        .status.pending { background: rgba(212, 175, 55, 0.2); color: var(--gold); border: 1px solid var(--gold); }
+        .status.accepted { background: rgba(59, 130, 246, 0.2); color: var(--info); border: 1px solid var(--info); }
+        .status.completed { background: rgba(74, 222, 128, 0.2); color: var(--veg-green); border: 1px solid var(--veg-green); }
+        .status.rejected { background: rgba(239, 68, 68, 0.2); color: var(--danger); border: 1px solid var(--danger); }
+
+        .action-btn { background: #333; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer; margin-right: 4px; transition: 0.2s;}
+        .action-btn:hover { background: var(--gold); color: black;}
+
+        .search-bar { width: 100%; padding: 1rem; background: var(--bg-panel); border: 1px solid var(--border); color: white; border-radius: 4px; font-family: inherit; margin-bottom: 1.5rem; outline: none; }
+        .search-bar:focus { border-color: var(--gold); }
+        
+        /* Specific tight layout for the order search bar */
+        .order-search-container { display: flex; align-items: center; gap: 10px; }
+        .order-search-container .search-bar { margin-bottom: 0; padding: 0.6rem 1rem; width: 300px; }
+
+        .btn { background: var(--gold); color: var(--bg-dark); border: none; padding: 0.6rem 1.2rem; border-radius: 4px; cursor: pointer; font-weight: 600; transition: all 0.3s; text-transform: uppercase; }
+        .btn:hover { background: var(--gold-light); transform: translateY(-2px); }
+
+        .pos-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 2rem; }
+        .bill-preview { background: white; color: black; padding: 2rem; border-radius: 4px; box-shadow: 0 0 20px rgba(0,0,0,0.5); font-family: monospace; }
+        .bill-preview h3 { color: black; text-align: center; margin-bottom: 1rem; border-bottom: 2px dashed #ccc; padding-bottom: 1rem; }
+        .bill-row { display: flex; justify-content: space-between; margin-bottom: 0.5rem; border-bottom: 1px solid #eee; padding-bottom: 0.2rem;}
+        .bill-total { margin-top: 1rem; padding-top: 1rem; border-top: 2px dashed #ccc; font-weight: bold; font-size: 1.2rem; display: flex; justify-content: space-between; }
+        .remove-pos-item { color: red; cursor: pointer; font-weight: bold; margin-left: 10px; font-family: sans-serif;}
+
+        @media print {
+            body { background: white; color: black; }
+            .sidebar, .header-row, .pos-controls, .remove-pos-item { display: none !important; }
+            .main-content { padding: 0; background: none; overflow: visible;} 
+            .panel { display: none; }
+            #pos-panel { display: block; } .pos-grid { display: block; } .bill-preview { box-shadow: none; padding: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <div class="sidebar-brand">
+            <h1>High Spirits</h1><p>Owner Dashboard</p>
+        </div>
+        <div class="nav-item active" id="tab-orders" onclick="switchTab('orders-panel', this)">Live Orders</div>
+        <div class="nav-item" onclick="switchTab('bookings-panel', this)">Table Bookings</div>
+        <div class="nav-item" id="tab-pos" onclick="switchTab('pos-panel', this)">POS & Billing</div>
+        <div class="nav-item" onclick="switchTab('search-panel', this)">Search Directory</div>
+        <a href="index.html" class="nav-item" style="margin-top: auto; border-top: 1px solid var(--border);">← Back to Website</a>
+    </div>
+
+    <div class="main-content">
+        <div id="orders-panel" class="panel active">
+            <div class="header-row">
+                <h2>Live Kitchen Orders</h2>
+                <div class="order-search-container">
+                    <input type="text" id="live-order-search" class="search-bar" placeholder="Search by ID, Name, or Phone..." onkeyup="filterOrders()">
+                    <button class="btn" onclick="loadLiveOrders()">↻ Refresh Data</button>
+                </div>
+            </div>
+            <table id="orders-table">
+                <thead><tr><th>ID</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <div id="bookings-panel" class="panel">
+            <div class="header-row"><h2>Today's Reservations</h2></div>
+            <table>
+                <thead><tr><th>Time</th><th>Name</th><th>Guests</th><th>Date</th><th>Status</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <div id="pos-panel" class="panel">
+            <div class="header-row pos-controls">
+                <h2>Point of Sale <span id="pos-editing-title" style="color:var(--text-muted); font-size: 1rem;">(Standalone Mode)</span></h2>
+                <div>
+                    <button class="btn" id="pos-save-btn" style="display:none; margin-right: 10px; background: var(--veg-green); color: white;" onclick="savePosOrderToDB()">💾 Save Edits</button>
+                    <button class="btn" onclick="window.print()">🖨️ Print Bill</button>
+                </div>
+            </div>
+            
+            <div class="pos-grid">
+                <div class="pos-controls">
+                    <div style="background: var(--bg-panel); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border);">
+                        <h3 style="margin-bottom: 1rem;">Add Item to Bill</h3>
+                        <input type="text" id="bill-item-name" class="search-bar" placeholder="Item Name (e.g., Paneer Tikka)">
+                        <input type="number" id="bill-item-price" class="search-bar" placeholder="Price (₹)">
+                        <button class="btn" style="width: 100%;" onclick="addPosItem()">Add to Receipt</button>
+                    </div>
+                </div>
+                
+                <div class="bill-preview" id="printable-receipt">
+                    <h3>HIGH SPIRITS CAFE<br><span style="font-size:0.8rem; font-weight:normal; letter-spacing: 2px;">PURE VEG</span></h3>
+                    <p style="text-align:center; font-size: 0.8rem; margin-bottom: 1rem;">Jaipur, Rajasthan<br>Date: <span id="bill-date"></span><br><span id="bill-order-id-display"></span></p>
+                    <div id="bill-items-container"></div>
+                    <div class="bill-total"><span>TOTAL</span><span id="bill-total-amount">₹0</span></div>
+                    <p style="text-align:center; font-size: 0.8rem; margin-top: 2rem;">Thank you for dining with us!<br>Visit again.</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="search-panel" class="panel">
+            <div class="header-row"><h2>Search Directory</h2></div>
+            <input type="text" class="search-bar" id="search-input" placeholder="Search static menu items..." onkeyup="filterDirectorySearch()">
+            <table id="search-table">
+                <thead><tr><th>Type</th><th>Name / Detail</th><th>Additional Info</th></tr></thead>
+                <tbody>
+                    <tr><td>Menu Item</td><td>Paneer Butter Masala</td><td>₹170 - Sabji Category</td></tr>
+                    <tr><td>Menu Item</td><td>Aloo Paratha</td><td>₹60 - Breads Category</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('bill-date').innerText = new Date().toLocaleDateString();
+
+        function switchTab(tabId, element) {
+            document.querySelectorAll('.panel').forEach(panel => panel.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            if(element) element.classList.add('active');
+            else document.getElementById(tabId === 'pos-panel' ? 'tab-pos' : 'tab-orders').classList.add('active');
+        }
+
+        // 🌟 NEW: Real-time filtering function for the Live Orders table
+        function filterOrders() {
+            let input = document.getElementById("live-order-search").value.toUpperCase();
+            let tr = document.getElementById("orders-table").getElementsByTagName("tr");
+            
+            // Start at 1 to skip the table headers
+            for (let i = 1; i < tr.length; i++) {
+                let idColumn = tr[i].getElementsByTagName("td")[0]; // Contains Order ID
+                let detailsColumn = tr[i].getElementsByTagName("td")[1]; // Contains Name & Phone
+                
+                if (idColumn && detailsColumn) {
+                    let idText = idColumn.textContent || idColumn.innerText;
+                    let detailsText = detailsColumn.textContent || detailsColumn.innerText;
+                    
+                    // If the input matches the ID OR the Name/Phone, show the row
+                    if (idText.toUpperCase().indexOf(input) > -1 || detailsText.toUpperCase().indexOf(input) > -1) {
+                        tr[i].style.display = "";
+                    } else {
+                        tr[i].style.display = "none";
+                    }
+                }
+            }
+        }
+
+        // Original Directory filter function
+        function filterDirectorySearch() {
+            let input = document.getElementById("search-input").value.toUpperCase();
+            let tr = document.getElementById("search-table").getElementsByTagName("tr");
+            for (let i = 1; i < tr.length; i++) {
+                let td = tr[i].getElementsByTagName("td")[1]; 
+                if (td) tr[i].style.display = (td.textContent || td.innerText).toUpperCase().indexOf(input) > -1 ? "" : "none";
+            }
+        }
+
+        // --- BACKEND API INTEGRATION ---
+        const API_BASE = 'http://localhost:8000';
+
+        async function loadLiveOrders() {
+            try {
+                const response = await fetch(`${API_BASE}/orders/`);
+                const orders = await response.json();
+                const tbody = document.querySelector('#orders-panel tbody');
+                tbody.innerHTML = ''; 
+                
+                orders.forEach(order => {
+                    const items = JSON.parse(order.items_json);
+                    const itemsHTML = items.map(item => `<div>• ${item.name} <span style="color:var(--gold); font-size:0.8rem;">(₹${item.price})</span></div>`).join('');
+                    const orderDataAttr = escape(JSON.stringify(order));
+
+                    tbody.innerHTML += `
+                        <tr>
+                            <td><strong style="color:var(--gold);">${order.id}</strong><br><span style="font-size:0.75rem; color:var(--text-muted);">${new Date(order.created_at).toLocaleTimeString()}</span></td>
+                            <td>${order.customer_name}<br><span style="font-size:0.8rem; color:var(--text-muted);">📞 ${order.customer_phone}</span></td>
+                            <td><div style="max-height: 80px; overflow-y: auto; font-size:0.9rem;">${itemsHTML}</div></td>
+                            <td><strong>₹${order.total_amount}</strong></td>
+                            <td><span class="status ${order.status.toLowerCase()}">${order.status}</span></td>
+                            <td>
+                                <button class="action-btn" onclick="updateOrderStatus('${order.id}', 'Accepted')">Accept</button>
+                                <button class="action-btn" onclick="updateOrderStatus('${order.id}', 'Completed')">Complete</button>
+                                <button class="action-btn" onclick="updateOrderStatus('${order.id}', 'Rejected')">Reject</button>
+                                <button class="action-btn" style="background:var(--gold); color:black;" onclick="loadOrderIntoPOS('${orderDataAttr}')">✏️ Edit Bill</button>
+                            </td>
+                        </tr>`;
+                });
+
+                // Re-apply the search filter immediately after loading new data
+                filterOrders();
+
+            } catch (error) { console.error("Failed to load orders", error); }
+        }
+
+        async function updateOrderStatus(orderId, newStatus) {
+            try {
+                await fetch(`${API_BASE}/orders/${orderId}/status`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: newStatus })
+                });
+                loadLiveOrders(); 
+            } catch (error) { alert("Failed to update status"); }
+        }
+
+        async function loadLiveBookings() {
+            try {
+                const response = await fetch(`${API_BASE}/bookings/`);
+                const bookings = await response.json();
+                const tbody = document.querySelector('#bookings-panel tbody');
+                tbody.innerHTML = ''; 
+                bookings.forEach(booking => {
+                    let statusClass = booking.status === "Pending" ? "pending" : "confirmed";
+                    tbody.innerHTML += `
+                    <tr>
+                        <td>${booking.time}</td>
+                        <td>${booking.customer_name}<br><span style="font-size:0.8rem; color:var(--text-muted);">📞 ${booking.customer_phone}</span></td>
+                        <td>${booking.guests} Guests</td>
+                        <td>${booking.date}</td>
+                        <td><span class="status ${statusClass}">${booking.status}</span></td>
+                    </tr>`;
+                });
+            } catch (error) { console.error("Failed to load bookings", error); }
+        }
+
+        // --- POS EDITOR LOGIC ---
+        let posActiveOrderId = null;
+        let posItems = [];
+        
+        function loadOrderIntoPOS(encodedOrderObj) {
+            const order = JSON.parse(unescape(encodedOrderObj));
+            posActiveOrderId = order.id;
+            posItems = JSON.parse(order.items_json);
+            
+            document.getElementById('pos-editing-title').innerText = `- Editing Order #${order.id} (${order.customer_name})`;
+            document.getElementById('bill-order-id-display').innerText = `Order ID: #${order.id}`;
+            document.getElementById('pos-save-btn').style.display = 'inline-block';
+            
+            renderPOS();
+            switchTab('pos-panel');
+        }
+
+        function renderPOS() {
+            const container = document.getElementById('bill-items-container');
+            container.innerHTML = '';
+            let total = 0;
+
+            posItems.forEach((item, index) => {
+                total += item.price;
+                container.innerHTML += `
+                    <div class="bill-row">
+                        <span>${item.name} <span class="remove-pos-item" onclick="removePosItem(${index})">✖</span></span>
+                        <span>₹${item.price}</span>
+                    </div>`;
+            });
+            document.getElementById('bill-total-amount').innerText = `₹${total}`;
+        }
+
+        function addPosItem() {
+            let name = document.getElementById('bill-item-name').value;
+            let price = parseInt(document.getElementById('bill-item-price').value);
+            if(!name || isNaN(price)) return alert("Please enter a valid item name and price.");
+            
+            posItems.push({ name: name, price: price });
+            renderPOS();
+            
+            document.getElementById('bill-item-name').value = ''; 
+            document.getElementById('bill-item-price').value = '';
+        }
+
+        function removePosItem(index) {
+            posItems.splice(index, 1);
+            renderPOS();
+        }
+
+        async function savePosOrderToDB() {
+            if(!posActiveOrderId) return;
+            
+            let total = posItems.reduce((sum, item) => sum + item.price, 0);
+            const editData = { items_json: JSON.stringify(posItems), total_amount: total };
+
+            try {
+                const res = await fetch(`${API_BASE}/orders/${posActiveOrderId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(editData)
+                });
+                if(res.ok) {
+                    alert("Bill successfully saved to Database!");
+                    loadLiveOrders(); 
+                }
+            } catch (error) {
+                alert("Error saving bill to database.");
+            }
+        }
+
+        // Initialize
+        window.onload = () => { loadLiveOrders(); loadLiveBookings(); };
+    </script>
+</body>
+</html>
