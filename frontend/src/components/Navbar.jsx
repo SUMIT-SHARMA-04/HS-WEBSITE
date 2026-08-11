@@ -17,12 +17,14 @@ export default function Navbar() {
     <header className="top-header">
       <h1>High Spirits</h1>
       <nav className="nav-links">
-        {/* Use standard anchor tags but point them to the root first so they work from the /cart page */}
         <a href="/#home">Home</a>
+        <a href="/#about">About</a>
         <a href="/#menu">Menu</a>
+        <a href="/#offers">Offers</a>
+        <a href="/#reviews">Reviews</a>
         <a href="/#book">Book Table</a>
+        <a href="/#contact">Contact</a>
         
-        {/* Use React Router's Link for the cart page to prevent page reload */}
         <Link to="/cart" className="cart-link">
           🛒 Cart (<span className={bump ? 'bump' : ''}>{cartCount}</span>)
         </Link>
