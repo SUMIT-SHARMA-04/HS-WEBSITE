@@ -30,17 +30,19 @@ export default function Booking() {
   };
 
   return (
-    <section id="book" className="section visible">
-      <h2 className="page-title">Reserve a Table</h2>
-      <form className="form-grid" onSubmit={handleSubmit}>
-        <input type="text" name="customer_name" placeholder="Full Name" value={formData.customer_name} onChange={handleChange} required />
-        <input type="tel" name="customer_phone" placeholder="Phone Number" value={formData.customer_phone} onChange={handleChange} required />
-        <input type="date" name="date" value={formData.date} onChange={handleChange} required />
-        <input type="time" name="time" value={formData.time} onChange={handleChange} required />
-        <input type="number" name="guests" min="1" max="20" placeholder="Number of Guests" className="full-width" value={formData.guests} onChange={handleChange} required />
-        <button type="submit" className="btn full-width">Confirm Reservation</button>
-      </form>
-      {message && <div className="msg-box" style={{ display: 'block' }}>{message}</div>}
+    <section id="book" className="section visible parallax-booking">
+      <div className="glass-card">
+        <h2 className="page-title" style={{ color: 'var(--gold)' }}>Reserve a Table</h2>
+        <form className="form-grid" onSubmit={handleSubmit}>
+          <input type="text" name="customer_name" placeholder="Full Name" value={formData.customer_name} onChange={handleChange} required />
+          <input type="tel" name="customer_phone" placeholder="Phone Number" value={formData.customer_phone} onChange={handleChange} required />
+          <input type="date" name="date" value={formData.date} onChange={handleChange} required />
+          <input type="time" name="time" value={formData.time} onChange={handleChange} required />
+          <input type="number" name="guests" min="1" max="20" placeholder="Number of Guests" className="full-width" value={formData.guests} onChange={handleChange} required />
+          <button type="submit" className="btn full-width">Confirm Reservation</button>
+        </form>
+        {message && <div className="msg-box" style={{ display: 'block', marginTop: '1rem' }}>{message}</div>}
+      </div>
     </section>
   );
 }
