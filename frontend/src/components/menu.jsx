@@ -171,15 +171,17 @@ const menuData = {
 };
 
 export default function Menu() {
-  const [activeCategory, setActiveCategory] = useState('All');
+  // Set initial state to null so no items show until a category is clicked
+  const [activeCategory, setActiveCategory] = useState(null);
   const [animatingBtn, setAnimatingBtn] = useState(null);
   const { addToCart } = useCart();
 
-  const categories = ['All', ...Object.keys(menuData)];
+  // Extract categories directly from data (No 'All' option)
+  const categories = Object.keys(menuData);
 
   const handleAddToCart = (item) => {
     addToCart(item);
-    setAnimatingBtn(item.name); // Using the item name to track the active button
+    setAnimatingBtn(item.name);
     setTimeout(() => setAnimatingBtn(null), 1000);
   };
 
@@ -200,45 +202,47 @@ export default function Menu() {
       </div>
       
       <div id="menu-container">
-        {Object.entries(menuData).map(([category, items]) => {
-          if (activeCategory !== 'All' && activeCategory !== category) return null;
-          
-          return (
-            <div key={category} className="menu-category-group">
-              <h3 className="menu-category cat-visible">{category}</h3>
-              <div className="menu-grid">
-                {items.map((item, index) => (
-                  <div key={item.name} className="menu-item" style={{ animationDelay: `${Math.min(index * 0.05, 1.5)}s` }}>
-                    <div className="menu-img-wrap">
-                      <img src={item.img} alt={item.name} className="menu-img loaded" loading="lazy" />
-                    </div>
-                    <div className="menu-content">
-                      <h4>
-                        <span className="veg-icon"><span className="veg-dot"></span></span>
-                        {item.name}
-                      </h4>
-                      <div>
-                        <p>₹{item.price}</p>
-                        <button 
-                          className="btn" 
-                          style={{ 
-                            width: '100%',
-                            background: animatingBtn === item.name ? '#008a00' : '',
-                            color: animatingBtn === item.name ? 'white' : '',
-                            transform: animatingBtn === item.name ? 'scale(0.95)' : 'scale(1)'
-                          }}
-                          onClick={() => handleAddToCart(item)}
-                        >
-                          {animatingBtn === item.name ? 'Added!' : 'Add to Cart'}
-                        </button>
-                      </div>
+        {!activeCategory ? (
+          <div className="select-prompt">
+            <h3 style={{ color: 'var(--gold-dark)', textAlign: 'center', marginTop: '3rem', fontWeight: '300' }}>
+              Please select a category above to view our dishes.
+            </h3>
+          </div>
+        ) : (
+          <div className="menu-category-group">
+            <h3 className="menu-category cat-visible">{activeCategory}</h3>
+            <div className="menu-grid">
+              {menuData[activeCategory].map((item, index) => (
+                <div key={item.name} className="menu-item" style={{ animationDelay: `${Math.min(index * 0.05, 1.5)}s` }}>
+                  <div className="menu-img-wrap">
+                    <img src={item.img} alt={item.name} className="menu-img loaded" loading="lazy" />
+                  </div>
+                  <div className="menu-content">
+                    <h4>
+                      <span className="veg-icon"><span className="veg-dot"></span></span>
+                      {item.name}
+                    </h4>
+                    <div>
+                      <p>₹{item.price}</p>
+                      <button 
+                        className="btn" 
+                        style={{ 
+                          width: '100%',
+                          background: animatingBtn === item.name ? '#008a00' : '',
+                          color: animatingBtn === item.name ? 'white' : '',
+                          transform: animatingBtn === item.name ? 'scale(0.95)' : 'scale(1)'
+                        }}
+                        onClick={() => handleAddToCart(item)}
+                      >
+                        {animatingBtn === item.name ? 'Added!' : 'Add to Cart'}
+                      </button>
                     </div>
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
-          );
-        })}
+          </div>
+        )}
       </div>
     </section>
   );
