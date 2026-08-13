@@ -1,212 +1,210 @@
-/* --- CLASSIC BROWN & CREAM COLOR PALETTE --- */
-:root {
-    --brown-dark: #2C1E16;    /* Deep espresso brown */
-    --brown-main: #4A3320;    /* Rich classic brown */
-    --brown-light: #8B5E34;   /* Warm caramel brown */
-    --cream-bg: #F9F6F0;      /* Classic warm cream background */
-    --cream-dark: #EAE0D5;    /* Slightly darker cream for cards/borders */
-    --gold: #A67B5B;          /* Muted, elegant brownish-gold */
-    --gold-light: #D2B48C;    /* Tan/Khaki */
-    --gold-dark: #5C4033;     /* Dark coffee */
-    
-    --text-dark: #2C1E16;
-    --text-light: #6D4C41;
-    --white: #FFFFFF;
-    --veg-green: #2E7D32;
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Inter:wght@300;400;500&display=swap');
 
-    /* Admin Dashboard Specific */
-    --bg-dark: #2C1E16;
-    --bg-panel: #3E2723;
-    --text-main: #F9F6F0;
-    --text-muted: #BCAAA4;
-    --border: rgba(166, 123, 91, 0.3);
+/* Define your restaurant's custom brand colors here */
+@theme {
+  --color-cream-50: #fdfbf7;
+  --color-cream-100: #fbf7ee;
+  --color-cream-200: #f5ddb8;
+  --color-cream-300: #ecd9a0;
+  --color-cream-400: #e3c878;
+  
+  --color-brown-400: #a37252;
+  --color-brown-500: #8b5a3e;
+  --color-brown-600: #7c4822;
+  --color-brown-700: #5e3419;
+  --color-brown-800: #42220e;
+  --color-brown-900: #261309;
+  --color-brown-950: #1a0d06;
+  
+  --color-gold-50: #fdf5e6;
+  --color-gold-100: #fdf5e6;
+  --color-gold-200: #fae6c5;
+  --color-gold-300: #f5d19d;
+  --color-gold-400: #f0bc74;
+  --color-gold-500: #e99d3e;
+  --color-gold-600: #d4a841;
+  --color-gold-700: #c4942a;
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: smooth; }
-
-body { 
-    font-family: 'Poppins', sans-serif; 
-    color: var(--text-dark); 
-    line-height: 1.6; 
-    /* Removed the doodle pattern, replaced with solid cream theme */
-    background-color: var(--cream-bg);
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-cream-100 text-brown-900 font-sans;
+  }
 }
 
-h1, h2, h3, h4 { font-family: 'Playfair Display', serif; }
-
-/* HEADER & NAVIGATION - Glassmorphism Floating Effect */
-.top-header {
-    background-color: rgba(44, 30, 22, 0.85); /* Translucent dark brown */
-    backdrop-filter: blur(12px); /* Mixes with the background */
-    -webkit-backdrop-filter: blur(12px);
-    padding: 1.2rem 5%;
-    display: flex; 
-    justify-content: space-between; 
-    align-items: center;
-    border-bottom: 1px solid rgba(166, 123, 91, 0.4); 
-    box-shadow: 0 4px 30px rgba(0,0,0,0.1); 
-    position: sticky; 
-    top: 0; 
-    z-index: 100;
-    transition: all 0.3s ease;
+@layer utilities {
+  .font-serif {
+    font-family: 'Playfair Display', Georgia, serif;
+  }
 }
 
-.top-header h1 { color: var(--gold); font-size: 1.6rem; letter-spacing: 2px; text-transform: uppercase; margin: 0;}
-.nav-links { display: flex; gap: 1.5rem; align-items: center; }
-.nav-links a { color: var(--cream-bg); text-decoration: none; font-size: 0.95rem; font-weight: 600; transition: color 0.3s, transform 0.2s; }
-.nav-links a:hover { color: var(--gold); transform: translateY(-2px); }
-
-.cart-link { 
-    border: 1px solid var(--gold); 
-    padding: 0.5rem 1rem; 
-    border-radius: 20px; 
-    display: flex; align-items: center; gap: 8px; 
+/* ===== Floating badge ===== */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-12px); }
 }
-.cart-link:hover { background: var(--gold); color: var(--brown-dark) !important; box-shadow: 0 0 15px rgba(166, 123, 91, 0.4); }
-
-/* SCROLL PROGRESS BAR */
-#scroll-progress {
-    position: fixed; top: 0; left: 0; height: 3px; background: var(--gold);
-    width: 0%; z-index: 9999; transition: width 0.1s;
+.animate-float {
+  animation: float 3.5s ease-in-out infinite;
 }
 
-/* HERO SECTION - Classic Restaurant Image */
-.hero {
-    min-height: 100vh;
-    display: flex; align-items: center; justify-content: center; text-align: center;
-    padding: 2rem 1rem; 
-    background: linear-gradient(rgba(44, 30, 22, 0.75), rgba(44, 30, 22, 0.9)), 
-                url('https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1600&q=80') center/cover fixed no-repeat;
-    color: var(--cream-bg);
-    margin-bottom: 3rem;
-    margin-top: -80px; 
-    padding-top: 80px;
+/* ===== Scroll reveal ===== */
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.7s ease-out, transform 0.7s ease-out;
+}
+.animate-in-view {
+  opacity: 1 !important;
+  transform: translateY(0) !important;
 }
 
-.hero h2 { font-size: 4rem; color: var(--gold); margin-bottom: 1rem; text-shadow: 2px 2px 8px rgba(0,0,0,0.5); }
-.hero p { font-size: 1.3rem; margin-bottom: 2.5rem; font-weight: 300; }
+/* ===== Hero entrance ===== */
+@keyframes fadeIn { 0% { opacity: 0; } 100% { opacity: 1; } }
+@keyframes slideUp {
+  0% { opacity: 0; transform: translateY(20px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in { animation: fadeIn 0.6s ease-out both; }
+.animate-slide-up { animation: slideUp 0.7s ease-out both; }
 
-/* GENERAL SECTIONS */
-.container { max-width: 1200px; margin: 0 auto; padding: 0 5%; }
-.section { margin-bottom: 5rem; }
-.page-title { 
-    color: var(--brown-main); font-size: 2.5rem; text-align: center; 
-    margin-bottom: 3rem; border-bottom: 2px solid var(--gold-light); 
-    padding-bottom: 0.5rem; display: inline-block; left: 50%; 
-    position: relative; transform: translateX(-50%); 
+/* ===== Gold shimmer text ===== */
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+.shimmer-gold {
+  background: linear-gradient(
+    90deg,
+    #d4a841 0%,
+    #ecd9a0 25%,
+    #fff8ee 50%,
+    #ecd9a0 75%,
+    #d4a841 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer 5s linear infinite;
 }
 
-/* MENU UI */
-.menu-tabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; margin-bottom: 3rem; }
-.menu-tab {
-    background: transparent; border: 1px solid var(--gold); color: var(--brown-main);
-    padding: 0.6rem 1.5rem; border-radius: 50px; cursor: pointer; font-family: 'Poppins', sans-serif;
-    font-weight: 600; transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+/* ===== Gold button ===== */
+.btn-gold {
+  background: linear-gradient(135deg, #d4a841, #a87a1f);
+  color: #261309;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
-.menu-tab.active, .menu-tab:hover { background: var(--brown-main); color: var(--cream-bg); border-color: var(--brown-main); transform: translateY(-2px); }
-
-.select-prompt {
-    padding: 4rem 1rem; background: var(--cream-dark); border-radius: 12px;
-    border: 2px dashed var(--gold-light); margin-top: 2rem;
+.btn-gold::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.4),
+    transparent
+  );
+  transition: left 0.6s ease;
 }
-
-.menu-category { color: var(--brown-main); font-size: 2rem; margin-bottom: 2rem; border-left: 5px solid var(--gold); padding-left: 15px; }
-.menu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 2rem; }
-
-.menu-item {
-    background: var(--white); 
-    border: 1px solid var(--cream-dark); border-radius: 12px;
-    overflow: hidden; box-shadow: 0 5px 15px rgba(74, 51, 32, 0.05);
-    transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.4s;
+.btn-gold:hover {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 10px 30px -8px rgba(196, 148, 42, 0.5);
 }
-.menu-item:hover { transform: translateY(-8px); box-shadow: 0 15px 30px rgba(74, 51, 32, 0.15); border-color: var(--gold); }
-.menu-img-wrap { width: 100%; height: 220px; overflow: hidden; position: relative; }
-.menu-img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s; }
-.menu-item:hover .menu-img { transform: scale(1.08); }
-.menu-content { padding: 1.5rem; }
-.menu-content h4 { font-size: 1.2rem; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 8px; color: var(--brown-dark);}
-.menu-content p { color: var(--gold-dark); font-weight: bold; font-size: 1.3rem; margin-bottom: 1.2rem; }
-
-.veg-icon { display: inline-flex; justify-content: center; align-items: center; width: 14px; height: 14px; border: 2px solid var(--veg-green); padding: 2px; border-radius: 2px; }
-.veg-dot { width: 6px; height: 6px; background-color: var(--veg-green); border-radius: 50%; }
-
-/* BUTTONS */
-.btn { 
-    background: var(--gold); color: var(--white); border: none; 
-    padding: 0.9rem 1.8rem; border-radius: 6px; cursor: pointer; 
-    font-weight: 600; text-transform: uppercase; letter-spacing: 1px; 
-    transition: all 0.3s; text-decoration: none; display: inline-block;
-}
-.btn:hover { background: var(--brown-main); transform: translateY(-3px); box-shadow: 0 8px 20px rgba(74, 51, 32, 0.2); }
-
-/* FORMS & INPUTS */
-.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
-.form-grid input { 
-    padding: 1.2rem; border: 1px solid var(--gold-light); border-radius: 6px;
-    font-family: inherit; font-size: 1rem; outline: none; background: var(--cream-bg); color: var(--brown-dark);
-}
-.form-grid input:focus { border-color: var(--gold); box-shadow: 0 0 0 4px rgba(166, 123, 91, 0.15); background: var(--white); }
-.form-grid .full-width { grid-column: span 2; }
-.msg-box { margin-top: 1rem; padding: 1rem; border-radius: 4px; background: #e6f4ea; color: #1e4620; border: 1px solid #c3e6cb; }
-
-/* REVIEWS SECTION */
-#star-rating { font-size: 3rem; color: #d7ccc8; cursor: pointer; text-align: center; margin-bottom: 1.5rem;}
-.star { transition: color 0.3s, transform 0.2s; display: inline-block; }
-.star.filled { color: var(--gold); }
-
-/* PARALLAX BOOKING - Brown Graphical Texture */
-.parallax-booking {
-    background-image: linear-gradient(rgba(44, 30, 22, 0.85), rgba(44, 30, 22, 0.95)), 
-                      url('https://images.unsplash.com/photo-1550684848-fac1c5b4e853?w=1600&q=80');
-    background-attachment: fixed; background-position: center; background-repeat: no-repeat;
-    background-size: cover; padding: 6rem 5%; margin-bottom: 5rem; color: var(--cream-bg);
-}
-.glass-card {
-    background: rgba(249, 246, 240, 0.05); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-    padding: 3rem; border-radius: 16px; border: 1px solid rgba(210, 180, 140, 0.2);
-    max-width: 800px; margin: 0 auto; box-shadow: 0 15px 35px rgba(0,0,0,0.3);
+.btn-gold:hover::before {
+  left: 100%;
 }
 
-/* OFFERS SECTION */
-.offer-card {
-    background: var(--white); padding: 2.5rem; border-radius: 12px; text-align: center;
-    border-top: 4px solid var(--gold); box-shadow: 0 10px 30px rgba(74, 51, 32, 0.05);
-    transition: transform 0.3s ease;
+/* ===== Gold outline button ===== */
+.btn-gold-outline {
+  border: 1.5px solid #d4a841;
+  color: #ecd9a0;
+  background: transparent;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  z-index: 1;
 }
-.offer-card:hover { transform: translateY(-10px); box-shadow: 0 20px 40px rgba(74, 51, 32, 0.15); }
-.offer-card h3 { color: var(--brown-main); font-size: 1.5rem; margin-bottom: 1rem; }
-.offer-time { display: inline-block; margin-top: 1rem; padding: 0.4rem 1rem; background: var(--cream-dark); border-radius: 50px; font-size: 0.85rem; color: var(--brown-dark); font-weight: 600; }
-
-/* CONTACT SECTION */
-.contact-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 3rem; text-align: center; }
-.contact-icon { font-size: 2.5rem; margin-bottom: 1rem; }
-.contact-item h4 { color: var(--brown-main); margin-bottom: 0.5rem; font-size: 1.2rem; }
-.social-link { color: var(--brown-dark); text-decoration: none; font-size: 0.9rem; border: 1px solid var(--gold); padding: 0.3rem 0.8rem; border-radius: 4px; transition: all 0.3s; }
-.social-link:hover { background: var(--gold); color: var(--white); }
-
-/* FOOTER */
-.main-footer { background: var(--brown-dark); color: var(--text-muted); text-align: center; padding: 3rem 5%; border-top: 3px solid var(--gold); }
-.main-footer a { color: var(--gold-light); text-decoration: none; transition: color 0.3s;}
-.main-footer a:hover { color: var(--white); }
-
-/* BUMP ANIMATION */
-.bump { animation: bumpAnim 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-@keyframes bumpAnim { 0% { transform: scale(1); } 50% { transform: scale(1.5); } 100% { transform: scale(1); } }
-
-@media (max-width: 768px) {
-    .hero h2 { font-size: 2.8rem; }
-    .form-grid { grid-template-columns: 1fr; }
-    .form-grid .full-width { grid-column: span 1; }
-    .nav-links { gap: 1rem; flex-wrap: wrap; justify-content: center;}
-    .top-header { flex-direction: column; gap: 1rem; padding: 1rem; }
-    .hero { margin-top: -130px; padding-top: 130px; }
+.btn-gold-outline::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, #d4a841, #a87a1f);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: -1;
+}
+.btn-gold-outline:hover {
+  color: #261309;
+  border-color: #c4942a;
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 10px 30px -10px rgba(196, 148, 42, 0.4);
+}
+.btn-gold-outline:hover::before {
+  opacity: 1;
 }
 
-@media print {
-    body { background: white; color: black; }
-    header, footer, nav, .sidebar, .header-row, .pos-controls, .remove-pos-item { display: none !important; }
-    .main-content { padding: 0; background: none; overflow: visible;} 
-    .panel { display: none; } #pos-panel { display: block; } .pos-grid { display: block; } 
-    .bill-preview { box-shadow: none; padding: 0; margin: 0 auto; max-width: 400px; border: 1px solid #ccc; }
+/* ===== Animated tabs (menu / category) ===== */
+.tab-active {
+  background: linear-gradient(135deg, #7c4822, #5e3419);
+  color: #fff8ee;
+  box-shadow: 0 4px 14px -4px rgba(124, 72, 34, 0.5);
+  transform: translateY(-1px);
+}
+.tab-inactive {
+  background: #fffdf9;
+  color: #7c4822;
+  border: 1px solid #f5ddb8;
+  transition: all 0.3s ease;
+}
+.tab-inactive:hover {
+  border-color: #d4a841;
+  color: #5e3419;
+  background: #fbf7ee;
+  transform: translateY(-1px);
+}
+
+/* ===== Gold divider with glow ===== */
+.gold-divider {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    #d4a841,
+    transparent
+  );
+  height: 1.5px;
+}
+
+/* ===== Soft pulse ===== */
+@keyframes softPulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+.animate-soft-pulse { animation: softPulse 2s ease-in-out infinite; }
+
+/* ===== Gold ring on focus for form fields ===== */
+.form-field {
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+.form-field:focus {
+  border-color: #d4a841;
+  box-shadow: 0 0 0 3px rgba(212, 168, 65, 0.2);
+  outline: none;
+}
+
+/* ===== Cart Drawer Slide-In Animation ===== */
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+.animate-slide-in-right {
+  animation: slideInRight 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
