@@ -1,80 +1,68 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
 
 const CartContext = createContext();
 
 export function CartProvider({ children }) {
-  // --- NEW: Global state for cart visibility ---
+  const [cart, setCart] = useState(() => {
+    const savedCart = localStorage.getItem('hsc_cart');
+    return savedCart ? JSON.parse(savedCart) : [];
+  });
   const [isCartOpen, setIsCartOpen] = useState(false);
 
-  const [cart, setCart] = useState(() => {
-    const savedCart = localStorage.getItem('hs_cart');
-    if (!savedCart) return [];
-
-    try {
-      const parsedCart = JSON.parse(savedCart);
-      const cleanedCart = [];
-      parsedCart.forEach(item => {
-        const existingItem = cleanedCart.find(c => c.name === item.name);
-        const itemQty = item.quantity ? item.quantity : 1; 
-        
-        if (existingItem) {
-          existingItem.quantity += itemQty;
-        } else {
-          cleanedCart.push({ ...item, quantity: itemQty });
-        }
-      });
-      return cleanedCart;
-    } catch (error) {
-      return []; 
-    }
-  });
-
   useEffect(() => {
-    localStorage.setItem('hs_cart', JSON.stringify(cart));
+    localStorage.setItem('hsc_cart', JSON.stringify(cart));
   }, [cart]);
 
   const addToCart = (item) => {
-    setCart((prevCart) => {
-      const existingItem = prevCart.find((cartItem) => cartItem.name === item.name);
-      if (existingItem) {
-        return prevCart.map((cartItem) =>
-          cartItem.name === item.name
-            ? { ...cartItem, quantity: cartItem.quantity + 1 }
-            : cartItem
+    setCart((prev) => {
+      const existing = prev.find((i) => i.id === item.id);
+      if (existing) {
+        return prev.map((i) =>
+          i.id === item.id ? { ...i, quantity: (i.quantity || 1) + 1 } : i
         );
       }
-      return [...prevCart, { ...item, quantity: 1 }];
+      return [...prev, { ...item, quantity: 1 }];
     });
   };
 
-  const updateQuantity = (itemName, amount) => {
-    setCart((prevCart) => 
-      prevCart.map((item) => {
-        if (item.name === itemName) {
-          const newQuantity = item.quantity + amount;
-          return { ...item, quantity: Math.max(1, newQuantity) }; 
-        }
-        return item;
-      })
-    );
+  const removeFromCart = (nameOrId) => {
+    setCart((prev) => prev.filter((i) => i.name !== nameOrId && i.id !== nameOrId));
   };
 
-  const removeFromCart = (itemName) => {
-    setCart((prevCart) => prevCart.filter((item) => item.name !== itemName));
+  const updateQuantity = (nameOrId, delta) => {
+    setCart((prev) =>
+      prev
+        .map((item) => {
+          if (item.name === nameOrId || item.id === nameOrId) {
+            const newQty = (item.quantity || 1) + delta;
+            return newQty > 0 ? { ...item, quantity: newQty } : null;
+          }
+          return item;
+        })
+        .filter(Boolean)
+    );
   };
 
   const clearCart = () => {
     setCart([]);
+    localStorage.removeItem('hsc_cart');
   };
 
-  const cartCount = cart.reduce((total, item) => total + (item.quantity || 1), 0);
+  const cartCount = cart.reduce((sum, item) => sum + (item.quantity || 1), 0);
 
   return (
-    // --- NEW: Added isCartOpen and setIsCartOpen to the value ---
-    <CartContext.Provider value={{ 
-      cart, cartCount, addToCart, updateQuantity, removeFromCart, clearCart,
-      isCartOpen, setIsCartOpen 
-    }}>
+    <CartContext.Provider
+      value={{
+        cart,
+        addToCart,
+        removeFromCart,
+        updateQuantity,
+        clearCart,
+        cartCount,
+        isCartOpen,
+        setIsCartOpen,
+      }}
+    >
       {children}
     </CartContext.Provider>
   );
