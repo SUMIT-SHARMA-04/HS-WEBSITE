@@ -1,0 +1,22 @@
+# Core Django
+Django>=6.1,<6.2
+
+# APIs and Authentication
+djangorestframework
+djangorestframework-simplejwt
+django-cors-headers
+drf-spectacular
+
+# WebSockets (Real-time tracking)
+channels
+channels-redis
+
+# Production & Server
+gunicorn
+daphne
+whitenoise
+
+# Database & Environment
+psycopg2-binary
+dj-database-url
+python-dotenv
