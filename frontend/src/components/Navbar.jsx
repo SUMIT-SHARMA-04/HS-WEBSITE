@@ -1,75 +1,81 @@
+import { ShoppingCart, Menu as MenuIcon, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { Menu as MenuIcon, X, UtensilsCrossed, ShoppingCart } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 
-const navLinks = [
-  { label: 'Home', href: '#home' },
-  { label: 'About', href: '#about' },
-  { label: 'Menu', href: '#menu' },
-  { label: 'Book', href: '#book' },
-  { label: 'Reviews', href: '#reviews' },
-  { label: 'Contact', href: '#contact' },
-];
-
 export default function Navbar() {
-  const [isOpen, setIsOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
-  const { cartCount, setIsCartOpen } = useCart();
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { cart, setIsCartOpen } = useCart();
+
+  const cartItemsCount = cart.reduce((total, item) => total + (item.quantity || 1), 0);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 60);
-    window.addEventListener('scroll', onScroll);
-    return () => window.removeEventListener('scroll', onScroll);
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 20);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   return (
-    <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'bg-brown-900/95 backdrop-blur-sm shadow-lg' : 'bg-transparent'}`}>
-      <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-        <a href="#home" className="flex items-center gap-2 group">
-          <UtensilsCrossed className="w-7 h-7 text-gold-400 group-hover:text-gold-300 transition-colors" />
-          <span className="font-serif text-xl font-bold text-cream-100 tracking-wide">High Spirits Cafe</span>
+    // FIXED: Ensured Navbar stays at z-50 so the CartDrawer (z-[101]) easily covers it
+    <nav className={`fixed w-full z-50 transition-all duration-300 ${
+      isScrolled ? 'bg-brown-950/95 backdrop-blur-md shadow-lg py-3' : 'bg-transparent py-5'
+    }`}>
+      <div className="max-w-7xl mx-auto px-6 flex justify-between items-center">
+        <a href="#" className="font-serif text-2xl font-bold text-gold-400 tracking-wider">
+          HIGH SPIRITS
         </a>
-
-        <ul className="hidden md:flex items-center gap-8">
-          {navLinks.map((link) => (
-            <li key={link.href}>
-              <a href={link.href} className="text-cream-200 hover:text-gold-300 text-sm font-medium tracking-wide uppercase transition-colors relative after:absolute after:-bottom-1 after:left-0 after:w-0 after:h-px after:bg-gold-400 after:transition-all hover:after:w-full">
-                {link.label}
-              </a>
-            </li>
-          ))}
-        </ul>
-
-        <div className="flex items-center gap-5 md:gap-6">
-          <button className="relative text-cream-200 hover:text-gold-300 transition-colors flex items-center" aria-label="View Cart" onClick={() => setIsCartOpen(true)}>
+        
+        <div className="hidden md:flex items-center gap-8 text-cream-100 font-medium">
+          <a href="#about" className="hover:text-gold-400 transition-colors">About</a>
+          <a href="#menu" className="hover:text-gold-400 transition-colors">Menu</a>
+          <a href="#delivery" className="hover:text-gold-400 transition-colors">Delivery</a>
+          <a href="#booking" className="hover:text-gold-400 transition-colors">Book Table</a>
+          <a href="#reviews" className="hover:text-gold-400 transition-colors">Reviews</a>
+          
+          <button 
+            onClick={() => setIsCartOpen(true)}
+            className="relative p-2 text-cream-100 hover:text-gold-400 transition-colors ml-4"
+          >
             <ShoppingCart className="w-6 h-6" />
-            {cartCount > 0 && (
-              <span className="absolute -top-1.5 -right-2 bg-red-500 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full">
-                {cartCount}
+            {cartItemsCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-gold-500 text-brown-950 text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-brown-950">
+                {cartItemsCount}
               </span>
             )}
           </button>
-          <a href="#book" className="hidden md:block btn-gold text-sm font-medium px-5 py-2.5 rounded-full">Book a Table</a>
-          <button className="md:hidden text-cream-200 hover:text-cream-100 transition-colors" onClick={() => setIsOpen(!isOpen)}>
-            {isOpen ? <X className="w-6 h-6" /> : <MenuIcon className="w-6 h-6" />}
+        </div>
+
+        <div className="md:hidden flex items-center gap-4">
+          <button 
+            onClick={() => setIsCartOpen(true)}
+            className="relative p-2 text-cream-100"
+          >
+            <ShoppingCart className="w-6 h-6" />
+            {cartItemsCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-gold-500 text-brown-950 text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-brown-950">
+                {cartItemsCount}
+              </span>
+            )}
+          </button>
+          
+          <button 
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="text-cream-100"
+          >
+            {isMobileMenuOpen ? <X className="w-6 h-6" /> : <MenuIcon className="w-6 h-6" />}
           </button>
         </div>
       </div>
 
-      {isOpen && (
-        <div className="md:hidden bg-brown-900/98 backdrop-blur-sm border-t border-brown-700">
-          <ul className="px-6 py-4 flex flex-col gap-4">
-            {navLinks.map((link) => (
-              <li key={link.href}>
-                <a href={link.href} onClick={() => setIsOpen(false)} className="text-cream-200 hover:text-cream-100 text-base font-medium block py-1 transition-colors">
-                  {link.label}
-                </a>
-              </li>
-            ))}
-            <li>
-              <a href="#book" onClick={() => setIsOpen(false)} className="inline-block btn-gold text-sm font-medium px-5 py-2.5 rounded-full mt-2">Book a Table</a>
-            </li>
-          </ul>
+      {isMobileMenuOpen && (
+        <div className="md:hidden absolute top-full left-0 w-full bg-brown-950 border-t border-brown-800 shadow-xl py-4 flex flex-col items-center gap-4">
+          <a href="#about" onClick={() => setIsMobileMenuOpen(false)} className="text-cream-100 hover:text-gold-400">About</a>
+          <a href="#menu" onClick={() => setIsMobileMenuOpen(false)} className="text-cream-100 hover:text-gold-400">Menu</a>
+          <a href="#delivery" onClick={() => setIsMobileMenuOpen(false)} className="text-cream-100 hover:text-gold-400">Delivery</a>
+          <a href="#booking" onClick={() => setIsMobileMenuOpen(false)} className="text-cream-100 hover:text-gold-400">Book Table</a>
+          <a href="#reviews" onClick={() => setIsMobileMenuOpen(false)} className="text-cream-100 hover:text-gold-400">Reviews</a>
         </div>
       )}
     </nav>

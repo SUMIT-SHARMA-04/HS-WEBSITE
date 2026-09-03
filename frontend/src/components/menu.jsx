@@ -16,8 +16,12 @@ export default function Menu() {
       try {
         const response = await fetch(`${API_BASE}/menu/`);
         if (response.ok) {
-          const data = await response.json();
-          const groupedData = data.reduce((acc, item) => {
+          const rawData = await response.json();
+          
+          // CRASH-PROOF: Extract the array whether Django paginated it or not
+          const menuArray = Array.isArray(rawData) ? rawData : rawData.results || [];
+          
+          const groupedData = menuArray.reduce((acc, item) => {
             if (!acc[item.category]) acc[item.category] = [];
             acc[item.category].push(item);
             return acc;
@@ -42,7 +46,7 @@ export default function Menu() {
     };
     fetchMenu();
   }, []);
-
+  
   useEffect(() => {
     if (loading) return;
     const observer = new IntersectionObserver((entries) => {
