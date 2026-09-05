@@ -5,13 +5,11 @@ from .models import Bill, Customer, HotelTab, Booking
 
 class HighSpiritsBackendTests(APITestCase):
     def setUp(self):
-        # Create an admin user for testing authenticated endpoints
         self.admin = User.objects.create_superuser('admin_test', 'admin@test.com', 'TestPass123!')
         
-        # Setup an active hotel tab for Room 101
         self.active_tab = HotelTab.objects.create(
             room_number='101',
-            guest_last_name='Smith',
+            guest_name='Smith',
             is_active=True
         )
 
@@ -33,7 +31,7 @@ class HighSpiritsBackendTests(APITestCase):
         payload = {
             "order_type": "Hotel",
             "room_number": "101",
-            "last_name": "Smith",
+            "guest_name": "Smith",
             "items_json": '[{"name": "Cold Brew Mocha", "price": 180, "quantity": 1}]',
             "total_amount": 180.00
         }
@@ -46,7 +44,7 @@ class HighSpiritsBackendTests(APITestCase):
         payload = {
             "order_type": "Hotel",
             "room_number": "101",
-            "last_name": "WrongName",
+            "guest_name": "WrongName",
             "items_json": '[{"name": "Cold Brew", "price": 180}]',
             "total_amount": 180.00
         }
@@ -55,7 +53,6 @@ class HighSpiritsBackendTests(APITestCase):
 
     def test_booking_guest_limit_validation(self):
         url = '/bookings/'
-        # Try booking for 15 guests (Limit is strictly 12)
         payload = {
             "customer_name": "Big Party",
             "email": "party@test.com",
