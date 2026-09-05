@@ -4,9 +4,25 @@ const CartContext = createContext();
 
 export function CartProvider({ children }) {
   const [cart, setCart] = useState(() => {
-    const savedCart = localStorage.getItem('hsc_cart');
-    return savedCart ? JSON.parse(savedCart) : [];
+    try {
+      const savedCart = localStorage.getItem('hsc_cart');
+      return savedCart ? JSON.parse(savedCart) : [];
+    } catch (error) {
+      console.error("Cart data corrupted, resetting.", error);
+      return [];
+    }
   });
+
+  const [hotelRoom, setHotelRoom] = useState(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const room = urlParams.get('room');
+    if (room) {
+      localStorage.setItem('hsc_room', room);
+      return room;
+    }
+    return localStorage.getItem('hsc_room') || null;
+  });
+
   const [isCartOpen, setIsCartOpen] = useState(false);
 
   useEffect(() => {
@@ -46,7 +62,13 @@ export function CartProvider({ children }) {
   const clearCart = () => {
     setCart([]);
     localStorage.removeItem('hsc_cart');
+    // We intentionally keep hsc_room so they stay logged into their room folio
   };
+
+  const clearRoom = () => {
+    setHotelRoom(null);
+    localStorage.removeItem('hsc_room');
+  }
 
   const cartCount = cart.reduce((sum, item) => sum + (item.quantity || 1), 0);
 
@@ -61,6 +83,8 @@ export function CartProvider({ children }) {
         cartCount,
         isCartOpen,
         setIsCartOpen,
+        hotelRoom,
+        clearRoom
       }}
     >
       {children}

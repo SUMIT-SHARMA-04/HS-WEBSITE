@@ -19,24 +19,30 @@ export default function Admin() {
   const [data, setData] = useState({ orders: [], bookings: [], menu: [], hotel: [], messages: [], reviews: [] });
   const [orderSearch, setOrderSearch] = useState('');
   
-  // Menu Management States
   const [isEditingMenu, setIsEditingMenu] = useState(false);
   const [menuForm, setMenuForm] = useState({ id: null, name: '', category: '', price: '', img: '', is_available: true });
 
-  // POS & Billing States
   const [posItems, setPosItems] = useState([]);
   const [printData, setPrintData] = useState(null);
 
-  // --- AUDIO & NOTIFICATION ENGINE ---
-  const [audioEnabled, setAudioEnabled] = useState(false);
-  const audioRef = useRef(new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3')); // Classic Ding
+  // FIXED: Pull audio state from local storage so it survives refresh
+  const [audioEnabled, setAudioEnabled] = useState(() => {
+    return localStorage.getItem('hsc_admin_audio') === 'true';
+  });
+  
+  const audioRef = useRef(new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3')); 
 
   const toggleAudio = () => {
-    if (!audioEnabled) {
+    const newState = !audioEnabled;
+    setAudioEnabled(newState);
+    localStorage.setItem('hsc_admin_audio', newState); // Persist to storage
+    
+    if (newState) {
       audioRef.current.play().catch(e => console.log("Audio unlock failed", e));
       toast.success("Audio Alerts Enabled!");
+    } else {
+      toast.success("Audio Alerts Disabled");
     }
-    setAudioEnabled(!audioEnabled);
   };
 
   const alertOwner = (type) => {
@@ -47,11 +53,8 @@ export default function Admin() {
       review: { text: "New review submitted", title: "New Review Pending" }
     };
     
-    // Play ringtone ding
     if (audioEnabled) {
       audioRef.current.play().catch(e => {});
-      
-      // Followed by Text to speech
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
         const u = new SpeechSynthesisUtterance(alerts[type]?.text || "New Notification");
@@ -65,7 +68,6 @@ export default function Admin() {
     }
   };
 
-  // --- DATA FETCHING ---
   const loadData = async () => {
     try {
       const [o, b, m, h, msg, r] = await Promise.all([
@@ -86,10 +88,8 @@ export default function Admin() {
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
     }
-    
     loadData();
 
-    // WebSocket connection replacing setInterval
     const ws = new WebSocket(`${WS_BASE}/ws/admin-notifications/`);
     ws.onmessage = (event) => {
       const payload = JSON.parse(event.data);
@@ -109,7 +109,6 @@ export default function Admin() {
     }
   };
 
-  // --- MENU MANAGEMENT ---
   const handleMenuSubmit = async (e) => {
     e.preventDefault();
     const method = isEditingMenu ? 'PUT' : 'POST';
@@ -126,7 +125,6 @@ export default function Admin() {
     }
   };
 
-  // --- POS & BILLING SYSTEM ---
   const addToPOS = (menuItem) => {
     const existingIndex = posItems.findIndex(i => i.id === menuItem.id);
     if (existingIndex >= 0) {
@@ -146,27 +144,57 @@ export default function Admin() {
 
   const posTotal = posItems.reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity), 0);
 
-  const handlePOSPrint = () => {
+  const handlePOSPrint = async () => {
     if (posItems.length === 0) return toast.error("Add items to print bill");
-    setPrintData({
-      title: 'Standalone Bill',
-      subtitle: 'Walk-in Customer',
-      items: posItems,
-      total: posTotal
-    });
-    setTimeout(() => window.print(), 500);
+    
+    try {
+      const payload = {
+        order_type: 'Standard',
+        customer_name: 'Walk-in Customer (POS)',
+        customer_phone: 'N/A',
+        items_json: JSON.stringify(posItems),
+        total_amount: posTotal,
+        idempotency_key: crypto.randomUUID()
+      };
+      
+      const response = await fetchWithAuth(`${API_BASE}/orders/checkout/`, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      
+      if (response.ok) {
+        const orderData = await response.json();
+        
+        await fetchWithAuth(`${API_BASE}/orders/${orderData.order_id}/status/`, {
+          method: 'PUT',
+          body: JSON.stringify({ status: 'Completed' })
+        });
+        
+        setPrintData({
+          title: 'Standalone Bill',
+          subtitle: 'Walk-in Customer',
+          items: posItems,
+          total: posTotal
+        });
+        
+        setTimeout(() => {
+          window.print();
+          setPosItems([]);
+          loadData();
+        }, 500);
+      }
+    } catch (error) {
+      toast.error("Failed to save POS order to database.");
+    }
   };
 
-  // --- AUTOMATED HOTEL CHECKOUT & BILLING ---
   const handleHotelCheckout = async (tab, room) => {
     if (!window.confirm(`Check out Room ${room} and generate final bill?`)) return;
 
-    // 1. Gather all orders tied to this room's active tab
     const tabOrders = data.orders.filter(o => o.hotel_tab?.id === tab.id);
     let grandTotal = 0;
     const combinedItems = {};
 
-    // 2. Consolidate items perfectly for the final receipt
     tabOrders.forEach(o => {
       grandTotal += parseFloat(o.total_amount);
       const items = JSON.parse(o.items_json || '[]');
@@ -179,7 +207,6 @@ export default function Admin() {
       });
     });
 
-    // 3. Prepare Print Data
     setPrintData({
       title: `Room ${room} Folio`,
       subtitle: `Guest: ${tab.guest_name}`,
@@ -187,10 +214,7 @@ export default function Admin() {
       total: grandTotal
     });
 
-    // 4. Close the Tab in the Database
     await handleAction(`${API_BASE}/hotel-tabs/${tab.id}/`, 'PATCH', {is_active: false}, `Room ${room} Checked Out successfully`);
-    
-    // 5. Trigger the Browser Print Dialog automatically
     setTimeout(() => window.print(), 500);
   };
 
@@ -199,7 +223,6 @@ export default function Admin() {
     navigate('/admin-login');
   };
 
-  // --- UI METRICS ---
   const pending = {
     o: data.orders.filter(x => x.status === 'Pending').length,
     b: data.bookings.filter(x => x.status === 'Pending').length,
@@ -233,7 +256,6 @@ export default function Admin() {
 
   return (
     <>
-      {/* --- PRINTABLE RECEIPT LAYER (Hidden on screen, visible only when printing) --- */}
       <div className="hidden print:block fixed inset-0 bg-white z-[9999] p-8 text-black font-mono">
         {printData && (
           <div className="max-w-md mx-auto">
@@ -273,14 +295,11 @@ export default function Admin() {
         )}
       </div>
 
-      {/* --- MAIN DASHBOARD LAYER (Visible on screen, hidden when printing) --- */}
       <div className="flex h-screen w-screen bg-cream-50 overflow-hidden font-sans text-brown-900 print:hidden">
         <Toaster position="top-right" />
         
-        {/* SIDEBAR */}
         <div className="w-64 bg-brown-950 text-cream-100 flex flex-col z-20 shadow-2xl relative">
           
-          {/* AUDIO TOGGLE */}
           <button onClick={toggleAudio} className="absolute top-4 left-4 p-2 bg-brown-800 rounded-full text-gold-400 hover:text-white transition-colors" title={audioEnabled ? "Disable Audio Alerts" : "Enable Audio Alerts"}>
             {audioEnabled ? <Volume2 className="w-4 h-4"/> : <VolumeX className="w-4 h-4 text-gray-500"/>}
           </button>
@@ -314,11 +333,9 @@ export default function Admin() {
           </button>
         </div>
 
-        {/* MAIN CONTENT AREA */}
         <div className="flex-1 overflow-y-auto p-8 lg:p-12 relative">
           <div className="absolute top-0 right-0 w-96 h-96 bg-gold-200/20 rounded-full blur-3xl pointer-events-none" />
 
-          {/* --- ANALYTICS PANEL --- */}
           {activeTab === 'analytics' && (
             <div className="relative z-10 animate-fade-in">
               <div className="mb-8">
@@ -366,7 +383,6 @@ export default function Admin() {
             </div>
           )}
 
-          {/* --- LIVE ORDERS PANEL --- */}
           {activeTab === 'orders' && (
             <div className="relative z-10 animate-fade-in">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
@@ -462,10 +478,8 @@ export default function Admin() {
             </div>
           )}
 
-          {/* --- POS & BILLING PANEL --- */}
           {activeTab === 'pos' && (
             <div className="relative z-10 animate-fade-in flex flex-col lg:flex-row gap-6 h-full min-h-[600px]">
-              {/* Menu Grid */}
               <div className="flex-1 overflow-y-auto pr-2">
                 <p className="text-gold-600 text-sm font-medium uppercase tracking-[0.2em] mb-1">Point of Sale</p>
                 <h2 className="font-serif text-3xl font-bold mb-6">Create Custom Bill</h2>
@@ -480,7 +494,6 @@ export default function Admin() {
                 </div>
               </div>
 
-              {/* Receipt Sidebar */}
               <div className="w-full lg:w-96 bg-white rounded-2xl shadow-lg border border-cream-200 p-6 flex flex-col h-full sticky top-0">
                 <h3 className="font-serif text-xl font-bold text-brown-900 mb-4 border-b border-cream-200 pb-4">Current Bill</h3>
                 
@@ -514,7 +527,6 @@ export default function Admin() {
             </div>
           )}
 
-          {/* --- MENU MANAGEMENT PANEL --- */}
           {activeTab === 'menu' && (
             <div className="relative z-10 animate-fade-in">
                <div className="flex justify-between items-center mb-8">
@@ -525,7 +537,6 @@ export default function Admin() {
                </div>
 
                <div className="grid lg:grid-cols-3 gap-8">
-                  {/* Form Section */}
                   <div className="lg:col-span-1">
                     <div className="bg-white p-6 rounded-2xl shadow-lg border border-cream-200 sticky top-8">
                       <h3 className="font-serif text-xl font-bold mb-4 flex items-center gap-2">
@@ -559,7 +570,6 @@ export default function Admin() {
                     </div>
                   </div>
 
-                  {/* Table Section */}
                   <div className="lg:col-span-2">
                     <div className="bg-white rounded-2xl shadow-lg border border-cream-200 overflow-hidden">
                       <table className="w-full text-left">
@@ -579,13 +589,10 @@ export default function Admin() {
                               </td>
                               <td className="p-4 font-bold text-gold-700">₹{item.price}</td>
                               <td className="p-4 text-right space-x-2">
-                                {/* Stock Toggle Button */}
                                 <button onClick={() => handleAction(`${API_BASE}/menu/${item.id}/`, 'PUT', {...item, is_available: !item.is_available}, 'Inventory Updated')} className={`p-2 rounded-lg ${item.is_available ? 'text-green-600 bg-green-50 hover:bg-green-100' : 'text-amber-600 bg-amber-50 hover:bg-amber-100'}`} title={item.is_available ? "Mark Out of Stock" : "Mark Available"}>
                                   <RefreshCw className="w-4 h-4" />
                                 </button>
-                                {/* Edit Button */}
                                 <button onClick={() => {setMenuForm(item); setIsEditingMenu(true); window.scrollTo({top: 0, behavior: 'smooth'});}} className="p-2 text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100"><Edit2 className="w-4 h-4" /></button>
-                                {/* Delete Button */}
                                 <button onClick={() => handleAction(`${API_BASE}/menu/${item.id}/`, 'DELETE', null, 'Item deleted')} className="p-2 text-red-600 bg-red-50 rounded-lg hover:bg-red-100"><Trash2 className="w-4 h-4" /></button>
                               </td>
                             </tr>
@@ -598,7 +605,6 @@ export default function Admin() {
             </div>
           )}
 
-          {/* --- HOTEL FOLIOS PANEL --- */}
           {activeTab === 'hotel' && (
             <div className="relative z-10 animate-fade-in">
                <div className="flex justify-between items-center mb-8">
@@ -645,7 +651,6 @@ export default function Admin() {
             </div>
           )}
 
-          {/* --- BOOKINGS PANEL --- */}
           {activeTab === 'bookings' && (
             <div className="relative z-10 animate-fade-in">
               <div className="flex justify-between items-center mb-8">
@@ -668,13 +673,17 @@ export default function Admin() {
                         <td className="p-5"><p className="font-medium text-brown-900">{booking.customer_name}</p><p className="text-xs text-brown-500 mt-0.5">{booking.customer_phone}</p></td>
                         <td className="p-5 font-medium text-brown-700">{booking.guests} Guests</td>
                         <td className="p-5 text-sm text-brown-600 max-w-[200px] truncate">{booking.special_requests || '-'}</td>
-                        <td className="p-5 flex gap-2">
+                        <td className="p-5 flex items-center gap-2">
+                          {/* FIXED: Added a Reject button instead of just deleting right away */}
                           {booking.status === 'Pending' ? (
-                             <button onClick={() => handleAction(`${API_BASE}/bookings/${booking.id}/`, 'PATCH', {status: 'Accepted'}, 'Booking Accepted')} className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-xs font-bold">Accept</button>
+                             <>
+                               <button onClick={() => handleAction(`${API_BASE}/bookings/${booking.id}/`, 'PATCH', {status: 'Accepted'}, 'Booking Accepted')} className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-xs font-bold hover:bg-blue-200 transition-colors">Accept</button>
+                               <button onClick={() => handleAction(`${API_BASE}/bookings/${booking.id}/`, 'PATCH', {status: 'Rejected'}, 'Booking Rejected')} className="px-3 py-1 bg-red-100 text-red-700 rounded text-xs font-bold hover:bg-red-200 transition-colors">Reject</button>
+                             </>
                           ) : (
-                             <span className="px-3 py-1 rounded-full text-xs font-bold border bg-green-100 text-green-700 border-green-200">{booking.status}</span>
+                             <span className={`px-3 py-1 rounded-full text-xs font-bold border ${booking.status === 'Accepted' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-red-100 text-red-700 border-red-200'}`}>{booking.status}</span>
                           )}
-                          <button onClick={() => handleAction(`${API_BASE}/bookings/${booking.id}/`, 'DELETE', null, 'Booking Deleted')} className="p-1 text-red-500 hover:text-red-700"><Trash2 className="w-4 h-4" /></button>
+                          <button onClick={() => handleAction(`${API_BASE}/bookings/${booking.id}/`, 'DELETE', null, 'Booking Deleted')} className="p-1 text-gray-400 hover:text-red-600 transition-colors ml-2" title="Delete Record"><Trash2 className="w-4 h-4" /></button>
                         </td>
                       </tr>
                     ))}
@@ -684,7 +693,6 @@ export default function Admin() {
             </div>
           )}
 
-          {/* --- INBOX PANEL --- */}
           {activeTab === 'inbox' && (
             <div className="relative z-10 animate-fade-in">
                <div className="flex justify-between items-center mb-8">
@@ -732,7 +740,6 @@ export default function Admin() {
             </div>
           )}
 
-          {/* --- REVIEWS MODERATION PANEL --- */}
           {activeTab === 'reviews' && (
             <div className="relative z-10 animate-fade-in">
               <div className="mb-8">

@@ -2,14 +2,15 @@ import Navbar from '@/components/Navbar';
 import Hero from '@/components/Hero';
 import About from '@/components/About';
 import Menu from '@/components/Menu';
+import Offers from '@/components/Offers'; // The file remains Offers.jsx, but it acts as Combos visually
 import Delivery from '@/components/Delivery';
 import Booking from '@/components/Booking';
+import EventPlanning from '@/components/EventPlanning'; // New component
 import Reviews from '@/components/Reviews';
 import Contact from '@/components/Contact';
 import Footer from '@/components/Footer';
 
 export default function Home() {
-  // Determine if the user is a hotel guest based on the URL parameter
   const urlParams = new URLSearchParams(window.location.search);
   const isHotelGuest = urlParams.has('room');
 
@@ -17,14 +18,14 @@ export default function Home() {
     <div className="bg-cream-50 text-brown-900 overflow-x-hidden">
       <Navbar />
       <main>
+        {/* Ordered exactly as requested */}
         <Hero />
         <About />
         <Menu />
-        
-        {/* Hide online delivery services if accessed from a hotel room */}
+        <Offers />
         {!isHotelGuest && <Delivery />}
-        
         <Booking />
+        <EventPlanning />
         <Reviews />
         <Contact />
       </main>

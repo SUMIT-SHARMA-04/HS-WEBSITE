@@ -4,9 +4,10 @@ import toast from 'react-hot-toast';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+// UPDATED: Localized to Jaipur, Rajasthan
 const info = [
-  { icon: MapPin, label: 'Location', lines: ['24 Rue de la Paix', 'New York, NY 10001'] },
-  { icon: Phone, label: 'Phone', lines: ['+1 (212) 555-0192'] },
+  { icon: MapPin, label: 'Location', lines: ['C-Scheme', 'Jaipur, Rajasthan 302001'] },
+  { icon: Phone, label: 'Phone', lines: ['+91 98765 43210'] },
   { icon: Mail, label: 'Email', lines: ['hello@highspiritscafe.com'] },
   { icon: Clock, label: 'Hours', lines: ['Mon – Fri: 12pm – 10pm', 'Sat – Sun: 11am – 11pm'] },
 ];
@@ -78,8 +79,9 @@ export default function Contact() {
               ))}
             </div>
 
+            {/* UPDATED: Google Maps redirect link for Jaipur */}
             <a 
-              href="https://www.google.com/maps/dir/?api=1&destination=24+Rue+de+la+Paix,+New+York,+NY+10001" 
+              href="https://www.google.com/maps/dir/?api=1&destination=C-Scheme,+Jaipur,+Rajasthan" 
               target="_blank" rel="noopener noreferrer"
               className="mt-10 h-52 bg-brown-100 rounded-2xl overflow-hidden relative block group cursor-pointer border-2 border-transparent hover:border-gold-400 transition-all duration-300 shadow-md hover:shadow-xl"
             >
@@ -88,9 +90,9 @@ export default function Contact() {
                 <div className="bg-white/90 backdrop-blur-sm rounded-xl px-5 py-3 text-center shadow-md group-hover:bg-gold-50 transition-colors">
                   <MapPin className="w-5 h-5 text-gold-700 mx-auto mb-1" />
                   <p className="font-serif font-semibold text-brown-900 text-sm flex items-center gap-2 justify-center">
-                    24 Rue de la Paix <ExternalLink className="w-3 h-3 text-brown-400" />
+                    C-Scheme, Jaipur <ExternalLink className="w-3 h-3 text-brown-400" />
                   </p>
-                  <p className="text-brown-500 text-xs">New York, NY 10001</p>
+                  <p className="text-brown-500 text-xs">Rajasthan 302001</p>
                 </div>
               </div>
             </a>
