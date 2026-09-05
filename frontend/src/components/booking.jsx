@@ -13,13 +13,12 @@ const empty = { name: '', email: '', phone: '', date: '', time: '', guests: '2',
 
 export default function Booking() {
   const [form, setForm] = useState(empty);
-  const [bookingStatus, setBookingStatus] = useState('idle'); // idle, loading, tracking
+  const [bookingStatus, setBookingStatus] = useState('idle'); 
   const [liveBookingId, setLiveBookingId] = useState(null);
   const [liveStatus, setLiveStatus] = useState('Pending');
 
   const today = new Date().toISOString().split('T')[0];
 
-  // Check memory for active booking session
   useEffect(() => {
     const savedBooking = localStorage.getItem('my_active_booking');
     if (savedBooking) {
@@ -28,19 +27,23 @@ export default function Booking() {
     }
   }, []);
 
-  // Poll for admin approval
   useEffect(() => {
     let interval;
     if (bookingStatus === 'tracking' && liveBookingId) {
       interval = setInterval(async () => {
         try {
           const res = await fetch(`${API_BASE}/bookings/${liveBookingId}/`);
+          
           if (res.ok) {
             const data = await res.json();
             setLiveStatus(data.status);
             if (data.status === 'Accepted' || data.status === 'Rejected') {
               clearInterval(interval);
             }
+          } else if (res.status === 404) {
+            // FIXED: If admin deleted the booking, treat it as rejected
+            setLiveStatus('Rejected');
+            clearInterval(interval);
           }
         } catch (error) {
           console.error("Failed to fetch booking status");
@@ -66,7 +69,6 @@ export default function Booking() {
     e.preventDefault();
     setBookingStatus('loading');
 
-    // Prepend policy agreement to special requests so Admin sees it instantly
     const combinedRequests = `[Policy: ${form.policy}] ${form.special_requests}`;
 
     try {
