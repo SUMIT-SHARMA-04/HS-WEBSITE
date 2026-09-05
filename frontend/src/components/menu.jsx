@@ -17,8 +17,6 @@ export default function Menu() {
         const response = await fetch(`${API_BASE}/menu/`);
         if (response.ok) {
           const rawData = await response.json();
-          
-          // CRASH-PROOF: Extract the array whether Django paginated it or not
           const menuArray = Array.isArray(rawData) ? rawData : rawData.results || [];
           
           const groupedData = menuArray.reduce((acc, item) => {
@@ -108,12 +106,17 @@ export default function Menu() {
                   key={item.id}
                   data-reveal
                   style={{ transitionDelay: `${Math.min((i % 4) * 50, 500)}ms` }}
-                  className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col border border-cream-100 group"
+                  className={`bg-white rounded-2xl overflow-hidden shadow-sm transition-all duration-300 flex flex-col border border-cream-100 group ${!item.is_available ? 'opacity-60 grayscale-[50%]' : 'hover:shadow-xl'}`}
                 >
                   <div className="relative w-full h-28 md:h-52 shrink-0 overflow-hidden">
                     <img src={item.img} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
-                    {item.category === "Combos & Offers" && (
+                    {item.category === "Combos & Offers" && item.is_available && (
                       <span className="absolute top-2 left-2 bg-red-600 text-white text-[9px] md:text-[10px] font-bold px-1.5 md:px-2 py-1 rounded-md uppercase shadow-sm">Offer</span>
+                    )}
+                    {!item.is_available && (
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                        <span className="bg-red-600 text-white font-bold px-3 py-1 rounded-full text-xs uppercase tracking-wider shadow-lg">Sold Out</span>
+                      </div>
                     )}
                   </div>
                   
@@ -130,12 +133,14 @@ export default function Menu() {
                     
                     <div className="mt-3 md:mt-6">
                       <button
-                        onClick={() => handleAddToCart(item)}
+                        onClick={() => item.is_available && handleAddToCart(item)}
+                        disabled={!item.is_available}
                         className={`w-full py-1.5 md:py-2.5 rounded-lg md:rounded-xl text-xs md:text-sm font-medium transition-all duration-300 ${
+                          !item.is_available ? 'bg-gray-200 text-gray-500 cursor-not-allowed' :
                           animatingBtn === item.id ? 'bg-green-600 text-white scale-95' : 'bg-brown-900 text-cream-100 hover:bg-brown-800'
                         }`}
                       >
-                        {animatingBtn === item.id ? 'Added!' : 'Add to Cart'}
+                        {!item.is_available ? 'Unavailable' : animatingBtn === item.id ? 'Added!' : 'Add to Cart'}
                       </button>
                     </div>
                   </div>
