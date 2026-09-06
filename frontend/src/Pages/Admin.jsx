@@ -25,7 +25,6 @@ export default function Admin() {
   const [posItems, setPosItems] = useState([]);
   const [printData, setPrintData] = useState(null);
 
-  // FIXED: Pull audio state from local storage so it survives refresh
   const [audioEnabled, setAudioEnabled] = useState(() => {
     return localStorage.getItem('hsc_admin_audio') === 'true';
   });
@@ -35,7 +34,7 @@ export default function Admin() {
   const toggleAudio = () => {
     const newState = !audioEnabled;
     setAudioEnabled(newState);
-    localStorage.setItem('hsc_admin_audio', newState); // Persist to storage
+    localStorage.setItem('hsc_admin_audio', newState); 
     
     if (newState) {
       audioRef.current.play().catch(e => console.log("Audio unlock failed", e));
@@ -99,22 +98,39 @@ export default function Admin() {
     return () => ws.close();
   }, [audioEnabled]);
 
+  // FIXED: Added headers to correctly format payload as JSON for the backend
   const handleAction = async (url, method, payload, successMsg) => {
-    const res = await fetchWithAuth(url, { method, body: payload ? JSON.stringify(payload) : null });
-    if (res.ok) { 
-      toast.success(successMsg); 
-      loadData(); 
-    } else {
-      toast.error("Action failed");
+    const options = { method };
+    if (payload) {
+      options.headers = { 'Content-Type': 'application/json' };
+      options.body = JSON.stringify(payload);
+    }
+    
+    try {
+      const res = await fetchWithAuth(url, options);
+      if (res.ok) { 
+        toast.success(successMsg); 
+        loadData(); 
+      } else {
+        toast.error("Action failed");
+      }
+    } catch (err) {
+      toast.error("Network error");
     }
   };
 
+  // FIXED: Added 'Content-Type' header to menu submission
   const handleMenuSubmit = async (e) => {
     e.preventDefault();
     const method = isEditingMenu ? 'PUT' : 'POST';
     const url = isEditingMenu ? `${API_BASE}/menu/${menuForm.id}/` : `${API_BASE}/menu/`;
     
-    const res = await fetchWithAuth(url, { method, body: JSON.stringify(menuForm) });
+    const res = await fetchWithAuth(url, { 
+      method, 
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(menuForm) 
+    });
+    
     if (res.ok) {
       toast.success(isEditingMenu ? "Menu item updated!" : "New item added!");
       setMenuForm({ id: null, name: '', category: '', price: '', img: '', is_available: true });
@@ -144,6 +160,7 @@ export default function Admin() {
 
   const posTotal = posItems.reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity), 0);
 
+  // FIXED: Added 'Content-Type' header to POS database insertions
   const handlePOSPrint = async () => {
     if (posItems.length === 0) return toast.error("Add items to print bill");
     
@@ -159,6 +176,7 @@ export default function Admin() {
       
       const response = await fetchWithAuth(`${API_BASE}/orders/checkout/`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
       
@@ -167,6 +185,7 @@ export default function Admin() {
         
         await fetchWithAuth(`${API_BASE}/orders/${orderData.order_id}/status/`, {
           method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'Completed' })
         });
         
@@ -674,7 +693,6 @@ export default function Admin() {
                         <td className="p-5 font-medium text-brown-700">{booking.guests} Guests</td>
                         <td className="p-5 text-sm text-brown-600 max-w-[200px] truncate">{booking.special_requests || '-'}</td>
                         <td className="p-5 flex items-center gap-2">
-                          {/* FIXED: Added a Reject button instead of just deleting right away */}
                           {booking.status === 'Pending' ? (
                              <>
                                <button onClick={() => handleAction(`${API_BASE}/bookings/${booking.id}/`, 'PATCH', {status: 'Accepted'}, 'Booking Accepted')} className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-xs font-bold hover:bg-blue-200 transition-colors">Accept</button>

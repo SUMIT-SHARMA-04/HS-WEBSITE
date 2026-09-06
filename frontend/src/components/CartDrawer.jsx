@@ -1,25 +1,10 @@
-import { X, Minus, Plus, Loader, CheckCircle2, Clock, ChefHat, CheckSquare, AlertCircle, CreditCard } from 'lucide-react';
+import { X, Minus, Plus, Loader, CheckCircle2, Clock, ChefHat, CheckSquare, AlertCircle } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const WS_BASE = API_BASE.replace(/^http/, 'ws');
-
-// FIXED: Dynamically inject Razorpay script to bypass ad-blockers blocking static scripts
-const loadRazorpayScript = () => {
-  return new Promise((resolve) => {
-    if (window.Razorpay) {
-      resolve(true);
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.body.appendChild(script);
-  });
-};
 
 export default function CartDrawer() {
   const { cart, removeFromCart, updateQuantity, isCartOpen, setIsCartOpen, clearCart } = useCart();
@@ -118,44 +103,25 @@ export default function CartDrawer() {
     }
   };
 
-  const handlePayment = async () => {
-    const isScriptLoaded = await loadRazorpayScript();
-    
-    if (!isScriptLoaded) {
-      toast.error("Payment gateway failed to load. Please check your internet connection.");
-      return;
+  // Temporarily bypasses Razorpay so you can take orders before KYC is approved
+  const handleConfirmOrder = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/orders/${liveOrderId}/status/`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'Paid & Preparing' })
+      });
+      
+      if (response.ok) {
+        setOrderStatus('Paid & Preparing');
+        toast.success("Order confirmed! Please pay at the counter when you arrive.");
+      } else {
+        toast.error("Failed to confirm order. Please call the restaurant.");
+      }
+    } catch (error) {
+      console.error("Failed to update status after confirmation");
+      toast.error("Network error. Please try again.");
     }
-
-    // CRITICAL: Razorpay will close instantly and look like a "blocked pop-up" if this key is invalid!
-    const options = {
-      key: "rzp_test_YOUR_KEY_HERE", 
-      amount: liveOrderAmount * 100,
-      currency: "INR",
-      name: "High Spirits Cafe",
-      description: `Payment for Order #${liveOrderId}`,
-      handler: async function () {
-        toast.success("Payment successful! Kitchen is preparing your order.");
-        
-        try {
-          await fetch(`${API_BASE}/orders/${liveOrderId}/status/`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: 'Paid & Preparing' })
-          });
-          setOrderStatus('Paid & Preparing');
-        } catch (error) {
-          console.error("Failed to update status after payment");
-        }
-      },
-      prefill: { name: customerDetails.name, contact: customerDetails.phone },
-      theme: { color: "#D4AF37" }
-    };
-    
-    const rzp = new window.Razorpay(options);
-    rzp.open();
-    rzp.on('payment.failed', function () {
-      toast.error("Payment failed. Please try again.");
-    });
   };
 
   const closeTracker = () => {
@@ -170,7 +136,7 @@ export default function CartDrawer() {
 
   const trackerSteps = [
     { id: 'Pending', label: 'Order Placed', desc: 'Awaiting restaurant confirmation', icon: Clock },
-    { id: 'Accepted', label: 'Order Accepted', desc: 'Please complete payment to begin', icon: CheckSquare },
+    { id: 'Accepted', label: 'Order Accepted', desc: 'Please confirm to begin preparation', icon: CheckSquare },
     { id: 'Paid & Preparing', label: 'Preparing Food', desc: 'Our chefs are cooking your meal', icon: ChefHat },
     { id: 'Completed', label: 'Ready / Delivered', desc: 'Enjoy your meal!', icon: CheckCircle2 }
   ];
@@ -213,7 +179,7 @@ export default function CartDrawer() {
                  <div className="bg-red-50 border border-red-200 p-6 rounded-2xl text-center shadow-sm">
                    <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
                    <h4 className="text-red-800 font-bold text-lg mb-2">Order Declined</h4>
-                   <p className="text-red-600 text-sm">The kitchen is currently unable to accept this order. No payment has been taken.</p>
+                   <p className="text-red-600 text-sm">The kitchen is currently unable to accept this order.</p>
                  </div>
               ) : (
                 <div className="relative pl-6">
@@ -256,12 +222,13 @@ export default function CartDrawer() {
                 </div>
               )}
 
+              {/* PAY AT COUNTER - APPEARS ONLY WHEN ACCEPTED */}
               {orderStatus === 'Accepted' && !isHotelGuest && (
                 <div className="mt-10 bg-gold-50 border border-gold-200 p-6 rounded-2xl text-center shadow-md animate-slide-up">
                   <p className="text-brown-900 font-bold mb-2 text-lg">Kitchen Approved!</p>
-                  <p className="text-sm text-brown-600 mb-5 leading-relaxed">Your food is ready to be cooked. Please complete your payment to begin preparation.</p>
-                  <button onClick={handlePayment} className="w-full btn-gold py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all">
-                    <CreditCard className="w-5 h-5" /> Pay ₹{liveOrderAmount} Now
+                  <p className="text-sm text-brown-600 mb-5 leading-relaxed">Your order has been reviewed. Click below to confirm and we will start preparing your food. Payment will be collected at the counter.</p>
+                  <button onClick={handleConfirmOrder} className="w-full btn-gold py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all">
+                    <ChefHat className="w-5 h-5" /> Confirm & Start Cooking
                   </button>
                 </div>
               )}
@@ -331,7 +298,8 @@ export default function CartDrawer() {
                 ) : (
                   <>
                     <input required type="text" placeholder="Your Full Name" value={customerDetails.name} onChange={e => setCustomerDetails({...customerDetails, name: e.target.value})} className="w-full px-4 py-3 bg-cream-50 border border-cream-200 rounded-xl text-sm font-medium focus:outline-none focus:border-gold-400 focus:bg-white transition-colors" />
-                    <input required type="tel" placeholder="Phone Number (for updates)" value={customerDetails.phone} onChange={e => setCustomerDetails({...customerDetails, phone: e.target.value})} className="w-full px-4 py-3 bg-cream-50 border border-cream-200 rounded-xl text-sm font-medium focus:outline-none focus:border-gold-400 focus:bg-white transition-colors" />
+                    {/* ENFORCED: Phone number explicitly marked as required for verification */}
+                    <input required type="tel" placeholder="Phone Number (Required for verification)" value={customerDetails.phone} onChange={e => setCustomerDetails({...customerDetails, phone: e.target.value})} className="w-full px-4 py-3 bg-cream-50 border border-cream-200 rounded-xl text-sm font-medium focus:outline-none focus:border-gold-400 focus:bg-white transition-colors" />
                   </>
                 )}
                 <div className="flex gap-3 pt-3">
