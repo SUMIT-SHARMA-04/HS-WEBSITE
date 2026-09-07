@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast, { Toaster } from 'react-hot-toast';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { fetchWithAuth } from '@/utils/api';
+import { fetchWithAuth } from '@/utils/api'; 
 import { 
   Utensils, CalendarDays, MonitorSmartphone, Search, RefreshCw, 
   CheckCircle, XCircle, ChefHat, Printer, Trash2, 
@@ -34,7 +34,7 @@ export default function Admin() {
   const toggleAudio = () => {
     const newState = !audioEnabled;
     setAudioEnabled(newState);
-    localStorage.setItem('hsc_admin_audio', newState); 
+    localStorage.setItem('hsc_admin_audio', newState);
     
     if (newState) {
       audioRef.current.play().catch(e => console.log("Audio unlock failed", e));
@@ -89,7 +89,9 @@ export default function Admin() {
     }
     loadData();
 
-    const ws = new WebSocket(`${WS_BASE}/ws/admin-notifications/`);
+    const token = localStorage.getItem('admin_access_token');
+    const ws = new WebSocket(`${WS_BASE}/ws/admin-notifications/?token=${token}`);
+    
     ws.onmessage = (event) => {
       const payload = JSON.parse(event.data);
       alertOwner(payload.event);
@@ -98,39 +100,28 @@ export default function Admin() {
     return () => ws.close();
   }, [audioEnabled]);
 
-  // FIXED: Added headers to correctly format payload as JSON for the backend
   const handleAction = async (url, method, payload, successMsg) => {
     const options = { method };
     if (payload) {
-      options.headers = { 'Content-Type': 'application/json' };
       options.body = JSON.stringify(payload);
+      options.headers = { 'Content-Type': 'application/json' };
     }
     
-    try {
-      const res = await fetchWithAuth(url, options);
-      if (res.ok) { 
-        toast.success(successMsg); 
-        loadData(); 
-      } else {
-        toast.error("Action failed");
-      }
-    } catch (err) {
-      toast.error("Network error");
+    const res = await fetchWithAuth(url, options);
+    if (res.ok) { 
+      toast.success(successMsg); 
+      loadData(); 
+    } else {
+      toast.error("Action failed");
     }
   };
 
-  // FIXED: Added 'Content-Type' header to menu submission
   const handleMenuSubmit = async (e) => {
     e.preventDefault();
     const method = isEditingMenu ? 'PUT' : 'POST';
     const url = isEditingMenu ? `${API_BASE}/menu/${menuForm.id}/` : `${API_BASE}/menu/`;
     
-    const res = await fetchWithAuth(url, { 
-      method, 
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(menuForm) 
-    });
-    
+    const res = await fetchWithAuth(url, { method, body: JSON.stringify(menuForm), headers: {'Content-Type': 'application/json'} });
     if (res.ok) {
       toast.success(isEditingMenu ? "Menu item updated!" : "New item added!");
       setMenuForm({ id: null, name: '', category: '', price: '', img: '', is_available: true });
@@ -160,7 +151,6 @@ export default function Admin() {
 
   const posTotal = posItems.reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity), 0);
 
-  // FIXED: Added 'Content-Type' header to POS database insertions
   const handlePOSPrint = async () => {
     if (posItems.length === 0) return toast.error("Add items to print bill");
     
@@ -651,8 +641,9 @@ export default function Admin() {
                       {activeTab ? (
                         <div className="space-y-4">
                           <div>
-                            <p className="text-xs text-brown-500 uppercase font-medium">Guest Name</p>
+                            <p className="text-xs text-brown-500 uppercase font-medium">Guest Details</p>
                             <p className="font-medium text-brown-900 text-lg">{activeTab.guest_name}</p>
+                            <p className="text-xs text-brown-500">{activeTab.guest_phone}</p>
                           </div>
                           <button onClick={() => handleHotelCheckout(activeTab, room)} className="w-full py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg text-sm font-bold hover:bg-red-100 transition-colors shadow-sm flex justify-center items-center gap-2">
                             <Printer className="w-4 h-4"/> Check Out & Print Bill

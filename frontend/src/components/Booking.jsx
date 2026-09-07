@@ -3,6 +3,7 @@ import { Calendar, Clock, Users, CheckCircle, XCircle, Loader } from 'lucide-rea
 import toast from 'react-hot-toast';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const WS_BASE = API_BASE.replace(/^http/, 'ws');
 
 const timeSlots = [
   '12:00 PM', '12:30 PM', '1:00 PM', '1:30 PM',
@@ -16,8 +17,14 @@ export default function Booking() {
   const [bookingStatus, setBookingStatus] = useState('idle'); 
   const [liveBookingId, setLiveBookingId] = useState(null);
   const [liveStatus, setLiveStatus] = useState('Pending');
+  const [today, setToday] = useState('');
 
-  const today = new Date().toISOString().split('T')[0];
+  useEffect(() => {
+    const now = new Date();
+    const offset = now.getTimezoneOffset() * 60000;
+    const localDate = new Date(now.getTime() - offset).toISOString().split('T')[0];
+    setToday(localDate);
+  }, []);
 
   useEffect(() => {
     const savedBooking = localStorage.getItem('my_active_booking');
@@ -28,29 +35,28 @@ export default function Booking() {
   }, []);
 
   useEffect(() => {
-    let interval;
+    let ws;
     if (bookingStatus === 'tracking' && liveBookingId) {
-      interval = setInterval(async () => {
-        try {
-          const res = await fetch(`${API_BASE}/bookings/${liveBookingId}/`);
-          
-          if (res.ok) {
-            const data = await res.json();
-            setLiveStatus(data.status);
-            if (data.status === 'Accepted' || data.status === 'Rejected') {
-              clearInterval(interval);
-            }
-          } else if (res.status === 404) {
-            // FIXED: If admin deleted the booking, treat it as rejected
-            setLiveStatus('Rejected');
-            clearInterval(interval);
-          }
-        } catch (error) {
-          console.error("Failed to fetch booking status");
-        }
-      }, 5000);
+      
+      // 1. Initial fetch just in case the status changed while the user was offline/refreshing
+      fetch(`${API_BASE}/bookings/${liveBookingId}/`)
+        .then(res => {
+          if (res.ok) return res.json();
+          if (res.status === 404) setLiveStatus('Rejected');
+        })
+        .then(data => {
+          if (data && data.status) setLiveStatus(data.status);
+        })
+        .catch(() => {});
+
+      // 2. Open WebSocket connection for instant live updates
+      ws = new WebSocket(`${WS_BASE}/ws/bookings/${liveBookingId}/`);
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        setLiveStatus(data.status);
+      };
     }
-    return () => clearInterval(interval);
+    return () => { if (ws) ws.close(); };
   }, [bookingStatus, liveBookingId]);
 
   useEffect(() => {

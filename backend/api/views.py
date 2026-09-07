@@ -1,4 +1,5 @@
 import logging
+import json
 from rest_framework import viewsets, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -32,21 +33,39 @@ class CheckoutView(APIView):
             if existing_bill:
                 return Response({"message": "Order already processed", "order_id": existing_bill.id, "status": existing_bill.status}, status=status.HTTP_200_OK)
 
+        try:
+            items = json.loads(data.get('items_json', '[]'))
+        except json.JSONDecodeError:
+            return Response({"error": "Invalid items format."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        calculated_total = 0
+        for item in items:
+            try:
+                menu_item = MenuItem.objects.get(name=item.get('name'))
+                if not menu_item.is_available:
+                    return Response({"error": f"'{menu_item.name}' is out of stock and cannot be ordered."}, status=status.HTTP_400_BAD_REQUEST)
+                calculated_total += float(menu_item.price) * item.get('quantity', 1)
+            except MenuItem.DoesNotExist:
+                return Response({"error": f"Item '{item.get('name')}' not found on the menu."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        true_total_amount = calculated_total
         order_type = data.get('order_type', 'Standard')
 
         if order_type == 'Hotel':
             room_number = data.get('room_number')
             guest_name = data.get('guest_name', '').strip()
+            guest_phone = data.get('guest_phone', '').strip()
             active_tab = HotelTab.objects.filter(room_number=room_number, is_active=True).first()
 
             if not active_tab:
-                return Response({"error": "No active tab found. Please contact the front desk to open a room charge account."}, status=status.HTTP_403_FORBIDDEN)
-            elif active_tab.guest_name.lower() != guest_name.lower():
-                return Response({"error": "Name verification failed for this room."}, status=status.HTTP_403_FORBIDDEN)
+                active_tab = HotelTab.objects.create(room_number=room_number, guest_name=guest_name, guest_phone=guest_phone, is_active=True)
+            else:
+                if active_tab.guest_name.lower() != guest_name.lower() or active_tab.guest_phone != guest_phone:
+                    return Response({"error": "Verification failed. This room is currently registered to a different guest or the details do not match."}, status=status.HTTP_403_FORBIDDEN)
 
             bill = Bill.objects.create(
                 hotel_tab=active_tab, order_type='Hotel', items_json=data.get('items_json'),
-                total_amount=data.get('total_amount'), status='Pending', idempotency_key=idempotency_key
+                total_amount=true_total_amount, status='Pending', idempotency_key=idempotency_key
             )
             
             Contact.objects.create(
@@ -63,38 +82,11 @@ class CheckoutView(APIView):
             customer, _ = Customer.objects.get_or_create(phone=data.get('customer_phone'), defaults={'name': data.get('customer_name')})
             bill = Bill.objects.create(
                 customer=customer, order_type='Standard', items_json=data.get('items_json'),
-                total_amount=data.get('total_amount'), status='Pending', idempotency_key=idempotency_key
+                total_amount=true_total_amount, status='Pending', idempotency_key=idempotency_key
             )
             trigger_admin_websocket('order')
             send_background_notification("SMS_ORDER_CONFIRMATION", customer.phone)
             return Response({"order_id": bill.id, "status": bill.status}, status=status.HTTP_201_CREATED)
-
-
-# --- NEW: VERIFY PAYMENT VIEW ---
-class VerifyPaymentView(APIView):
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-        order_id = request.data.get('order_id')
-        
-        # Note: In a live production app, verify razorpay_payment_id and razorpay_signature 
-        # here using the Razorpay Python SDK to prevent spoofing.
-        
-        try:
-            bill = Bill.objects.get(pk=order_id)
-            # Only allow state transition if the kitchen actually accepted it
-            if bill.status == 'Accepted':
-                bill.status = 'Paid & Preparing'
-                bill.save()
-                
-                # Push real-time update to the frontend
-                async_to_sync(get_channel_layer().group_send)(f"order_{bill.id}", {"type": "order_status_message", "status": bill.status})
-                return Response({"message": "Payment verified successfully", "status": bill.status}, status=status.HTTP_200_OK)
-            else:
-                return Response({"error": "Order is not in an accepted state"}, status=status.HTTP_400_BAD_REQUEST)
-        except Bill.DoesNotExist:
-            return Response({"error": "Order not found"}, status=status.HTTP_404_NOT_FOUND)
-
 
 class OrderListDetailView(APIView):
     permission_classes = [IsAuthenticated] 
@@ -111,28 +103,29 @@ class OrderListDetailView(APIView):
         return Response(BillSerializer(bills, many=True).data)
 
 class OrderStatusView(APIView):
-    def get_permissions(self): 
-        if self.request.method == 'GET':
-            return [AllowAny()]
-        return [IsAuthenticated()]
+    # FIXED: Allow public customers to confirm their orders via PUT
+    permission_classes = [AllowAny]
         
     def get(self, request, pk):
         try: return Response({"status": Bill.objects.get(pk=pk).status})
         except Bill.DoesNotExist: return Response(status=status.HTTP_404_NOT_FOUND)
 
     def put(self, request, pk):
-        bill = Bill.objects.get(pk=pk)
-        bill.status = request.data.get('status')
-        bill.save()
-        async_to_sync(get_channel_layer().group_send)(f"order_{bill.id}", {"type": "order_status_message", "status": bill.status})
-        return Response({"status": bill.status})
+        try:
+            bill = Bill.objects.get(pk=pk)
+            bill.status = request.data.get('status')
+            bill.save()
+            async_to_sync(get_channel_layer().group_send)(f"order_{bill.id}", {"type": "order_status_message", "status": bill.status})
+            return Response({"status": bill.status})
+        except Bill.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
 
 class BookingViewSet(viewsets.ModelViewSet):
     queryset = Booking.objects.all().order_by('-date', '-time')
     serializer_class = BookingSerializer
     
     def get_permissions(self): 
-        if self.request.method in ['POST', 'GET']:
+        if self.action in ['create', 'retrieve']:
             return [AllowAny()]
         return [IsAuthenticated()]
     
@@ -140,6 +133,23 @@ class BookingViewSet(viewsets.ModelViewSet):
         booking = serializer.save()
         trigger_admin_websocket('booking')
         send_background_notification("EMAIL_BOOKING_RECEIVED", booking.email)
+
+    def perform_update(self, serializer):
+        booking = serializer.save()
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"booking_{booking.id}",
+            {"type": "booking_status_message", "status": booking.status}
+        )
+
+    def perform_destroy(self, instance):
+        booking_id = instance.id
+        super().perform_destroy(instance)
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"booking_{booking_id}",
+            {"type": "booking_status_message", "status": "Rejected"}
+        )
 
 class ContactViewSet(viewsets.ModelViewSet):
     queryset = Contact.objects.all().order_by('-created_at')
@@ -155,7 +165,7 @@ class ReviewViewSet(viewsets.ModelViewSet):
     serializer_class = ReviewSerializer
     
     def get_permissions(self): 
-        if self.request.method in ['GET', 'POST']:
+        if self.action in ['create', 'list']:
             return [AllowAny()]
         return [IsAuthenticated()]
     

@@ -9,12 +9,12 @@ const WS_BASE = API_BASE.replace(/^http/, 'ws');
 export default function CartDrawer() {
   const { cart, removeFromCart, updateQuantity, isCartOpen, setIsCartOpen, clearCart } = useCart();
   const [showCheckoutForm, setShowCheckoutForm] = useState(false);
-  const [customerDetails, setCustomerDetails] = useState({ name: '', phone: '', guestName: '' });
+  
+  const [customerDetails, setCustomerDetails] = useState({ name: '', phone: '' });
   
   const [checkoutStatus, setCheckoutStatus] = useState('idle');
   const [liveOrderId, setLiveOrderId] = useState(null);
   const [orderStatus, setOrderStatus] = useState('');
-  const [liveOrderAmount, setLiveOrderAmount] = useState(0);
   
   const [idempotencyKey] = useState(() => crypto.randomUUID());
 
@@ -26,11 +26,8 @@ export default function CartDrawer() {
 
   useEffect(() => {
     const savedOrderId = localStorage.getItem('my_active_order');
-    const savedAmount = localStorage.getItem('my_active_order_amount');
-    
     if (savedOrderId) {
       setLiveOrderId(savedOrderId);
-      setLiveOrderAmount(Number(savedAmount) || 0);
       setCheckoutStatus('tracking');
       setIsCartOpen(true);
       
@@ -64,7 +61,7 @@ export default function CartDrawer() {
     setCheckoutStatus('loading');
 
     const payload = isHotelGuest ? {
-      order_type: 'Hotel', room_number: roomNumber, guest_name: customerDetails.guestName,
+      order_type: 'Hotel', room_number: roomNumber, guest_name: customerDetails.name, guest_phone: customerDetails.phone,
       items_json: JSON.stringify(cart), total_amount: cartTotal, idempotency_key: idempotencyKey
     } : {
       order_type: 'Standard', customer_name: customerDetails.name, customer_phone: customerDetails.phone,
@@ -87,14 +84,14 @@ export default function CartDrawer() {
 
       setLiveOrderId(data.order_id);
       setOrderStatus(data.status);
-      setLiveOrderAmount(cartTotal);
       setCheckoutStatus('tracking');
       setShowCheckoutForm(false);
       clearCart();
       
-      localStorage.setItem('my_active_order', data.order_id);
-      localStorage.setItem('my_active_order_amount', cartTotal.toString());
+      // FIXED: Clear the customer details from memory so the next user has a blank form
+      setCustomerDetails({ name: '', phone: '' }); 
       
+      localStorage.setItem('my_active_order', data.order_id);
       toast.success("Order sent to kitchen! Awaiting confirmation.");
 
     } catch (error) {
@@ -103,7 +100,6 @@ export default function CartDrawer() {
     }
   };
 
-  // Temporarily bypasses Razorpay so you can take orders before KYC is approved
   const handleConfirmOrder = async () => {
     try {
       const response = await fetch(`${API_BASE}/orders/${liveOrderId}/status/`, {
@@ -111,15 +107,13 @@ export default function CartDrawer() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'Paid & Preparing' })
       });
-      
       if (response.ok) {
         setOrderStatus('Paid & Preparing');
-        toast.success("Order confirmed! Please pay at the counter when you arrive.");
+        toast.success("Order confirmed! Please pay at the counter.");
       } else {
         toast.error("Failed to confirm order. Please call the restaurant.");
       }
     } catch (error) {
-      console.error("Failed to update status after confirmation");
       toast.error("Network error. Please try again.");
     }
   };
@@ -128,15 +122,16 @@ export default function CartDrawer() {
     setCheckoutStatus('idle');
     setLiveOrderId(null);
     setOrderStatus('');
-    setLiveOrderAmount(0);
     setIsCartOpen(false);
+    
+    // FIXED: Ensure details are wiped even if they cancel tracking
+    setCustomerDetails({ name: '', phone: '' }); 
     localStorage.removeItem('my_active_order');
-    localStorage.removeItem('my_active_order_amount');
   };
 
   const trackerSteps = [
     { id: 'Pending', label: 'Order Placed', desc: 'Awaiting restaurant confirmation', icon: Clock },
-    { id: 'Accepted', label: 'Order Accepted', desc: 'Please confirm to begin preparation', icon: CheckSquare },
+    { id: 'Accepted', label: 'Order Accepted', desc: isHotelGuest ? 'Billed to room. Preparing food.' : 'Please confirm to begin preparation', icon: CheckSquare },
     { id: 'Paid & Preparing', label: 'Preparing Food', desc: 'Our chefs are cooking your meal', icon: ChefHat },
     { id: 'Completed', label: 'Ready / Delivered', desc: 'Enjoy your meal!', icon: CheckCircle2 }
   ];
@@ -222,7 +217,7 @@ export default function CartDrawer() {
                 </div>
               )}
 
-              {/* PAY AT COUNTER - APPEARS ONLY WHEN ACCEPTED */}
+              {/* PAY AT COUNTER CONFIRMATION */}
               {orderStatus === 'Accepted' && !isHotelGuest && (
                 <div className="mt-10 bg-gold-50 border border-gold-200 p-6 rounded-2xl text-center shadow-md animate-slide-up">
                   <p className="text-brown-900 font-bold mb-2 text-lg">Kitchen Approved!</p>
@@ -232,15 +227,8 @@ export default function CartDrawer() {
                   </button>
                 </div>
               )}
-              
-              {orderStatus === 'Accepted' && isHotelGuest && (
-                <div className="mt-10 bg-green-50 border border-green-200 p-6 rounded-2xl text-center shadow-md animate-slide-up">
-                  <p className="text-green-800 font-bold mb-2 text-lg">Order Confirmed!</p>
-                  <p className="text-sm text-green-700 leading-relaxed">Your order has been accepted and billed to Room {roomNumber}. The kitchen will begin preparing your food shortly.</p>
-                </div>
-              )}
 
-              <button onClick={closeTracker} className="mt-10 mx-auto block px-8 py-3 text-brown-500 bg-cream-100 hover:bg-cream-200 rounded-full text-sm font-bold tracking-wide transition-colors">
+              <button onClick={closeTracker} className="mt-14 mx-auto block px-8 py-3 text-brown-500 bg-cream-100 hover:bg-cream-200 rounded-full text-sm font-bold tracking-wide transition-colors">
                 Dismiss Tracker
               </button>
             </div>
@@ -293,13 +281,13 @@ export default function CartDrawer() {
                 {isHotelGuest ? (
                   <>
                     <p className="text-sm text-brown-600 font-bold uppercase tracking-wider mb-2">Room {roomNumber} Folio Verification</p>
-                    <input required type="text" placeholder="Enter Guest Full Name" value={customerDetails.guestName || ''} onChange={e => setCustomerDetails({...customerDetails, guestName: e.target.value})} className="w-full px-4 py-4 bg-cream-50 border border-cream-200 rounded-xl text-sm font-medium focus:outline-none focus:border-gold-400 focus:bg-white transition-colors" />
+                    <input required type="text" placeholder="Registered Guest Name" value={customerDetails.name} onChange={e => setCustomerDetails({...customerDetails, name: e.target.value})} className="w-full px-4 py-4 bg-cream-50 border border-cream-200 rounded-xl text-sm font-medium focus:outline-none focus:border-gold-400 focus:bg-white transition-colors" />
+                    <input required type="tel" placeholder="Registered Phone Number" value={customerDetails.phone} onChange={e => setCustomerDetails({...customerDetails, phone: e.target.value})} className="w-full px-4 py-4 bg-cream-50 border border-cream-200 rounded-xl text-sm font-medium focus:outline-none focus:border-gold-400 focus:bg-white transition-colors" />
                   </>
                 ) : (
                   <>
                     <input required type="text" placeholder="Your Full Name" value={customerDetails.name} onChange={e => setCustomerDetails({...customerDetails, name: e.target.value})} className="w-full px-4 py-3 bg-cream-50 border border-cream-200 rounded-xl text-sm font-medium focus:outline-none focus:border-gold-400 focus:bg-white transition-colors" />
-                    {/* ENFORCED: Phone number explicitly marked as required for verification */}
-                    <input required type="tel" placeholder="Phone Number (Required for verification)" value={customerDetails.phone} onChange={e => setCustomerDetails({...customerDetails, phone: e.target.value})} className="w-full px-4 py-3 bg-cream-50 border border-cream-200 rounded-xl text-sm font-medium focus:outline-none focus:border-gold-400 focus:bg-white transition-colors" />
+                    <input required type="tel" placeholder="Phone Number (Required)" value={customerDetails.phone} onChange={e => setCustomerDetails({...customerDetails, phone: e.target.value})} className="w-full px-4 py-3 bg-cream-50 border border-cream-200 rounded-xl text-sm font-medium focus:outline-none focus:border-gold-400 focus:bg-white transition-colors" />
                   </>
                 )}
                 <div className="flex gap-3 pt-3">

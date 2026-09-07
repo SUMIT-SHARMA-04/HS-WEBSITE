@@ -7,7 +7,7 @@ class CustomerAdmin(admin.ModelAdmin):
 
 @admin.register(HotelTab)
 class HotelTabAdmin(admin.ModelAdmin):
-    list_display = ('room_number', 'guest_name', 'is_active', 'created_at')
+    list_display = ('room_number', 'guest_name', 'guest_phone', 'is_active', 'created_at')
     list_filter = ('is_active',)
 
 @admin.register(Bill)
