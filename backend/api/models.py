@@ -12,7 +12,7 @@ class Customer(models.Model):
 class HotelTab(models.Model):
     room_number = models.CharField(max_length=3)
     guest_name = models.CharField(max_length=100)
-    guest_phone = models.CharField(max_length=20, null=True, blank=True) # ADDED
+    guest_phone = models.CharField(max_length=20, null=True, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

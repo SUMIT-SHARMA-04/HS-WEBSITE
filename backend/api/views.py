@@ -1,9 +1,13 @@
 import logging
 import json
+import re
+from datetime import date
+from django.db import transaction
 from rest_framework import viewsets, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.exceptions import ValidationError
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from .models import Customer, HotelTab, Bill, MenuItem, Booking, Contact, Review
@@ -24,6 +28,7 @@ def trigger_admin_websocket(event_type):
 class CheckoutView(APIView):
     permission_classes = [AllowAny] 
 
+    @transaction.atomic 
     def post(self, request):
         data = request.data
         idempotency_key = data.get('idempotency_key')
@@ -40,21 +45,43 @@ class CheckoutView(APIView):
             
         calculated_total = 0
         for item in items:
-            try:
-                menu_item = MenuItem.objects.get(name=item.get('name'))
-                if not menu_item.is_available:
-                    return Response({"error": f"'{menu_item.name}' is out of stock and cannot be ordered."}, status=status.HTTP_400_BAD_REQUEST)
-                calculated_total += float(menu_item.price) * item.get('quantity', 1)
-            except MenuItem.DoesNotExist:
+            menu_item = MenuItem.objects.filter(name=item.get('name')).first()
+            
+            if not menu_item:
                 return Response({"error": f"Item '{item.get('name')}' not found on the menu."}, status=status.HTTP_400_BAD_REQUEST)
+            if not menu_item.is_available:
+                return Response({"error": f"'{menu_item.name}' is out of stock and cannot be ordered."}, status=status.HTTP_400_BAD_REQUEST)
+            
+            try:
+                quantity = int(item.get('quantity', 1))
+                if quantity <= 0:
+                    return Response({"error": "Quantity must be at least 1."}, status=status.HTTP_400_BAD_REQUEST)
+            except ValueError:
+                return Response({"error": "Invalid quantity format."}, status=status.HTTP_400_BAD_REQUEST)
+
+            calculated_total += float(menu_item.price) * quantity
         
         true_total_amount = calculated_total
         order_type = data.get('order_type', 'Standard')
 
         if order_type == 'Hotel':
-            room_number = data.get('room_number')
+            room_number = str(data.get('room_number'))
+            
+            VALID_ROOMS = ['101', '102', '103', '104', '105', '106', '107', '108']
+            if room_number not in VALID_ROOMS:
+                return Response({"error": f"Invalid Room Number '{room_number}'. Valid rooms are {', '.join(VALID_ROOMS)}."}, status=status.HTTP_400_BAD_REQUEST)
+
+            if Bill.objects.filter(hotel_tab__room_number=room_number, status='Pending').exists():
+                return Response({"error": "This room already has a pending order. Please wait for the kitchen to accept it before placing another."}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
             guest_name = data.get('guest_name', '').strip()
             guest_phone = data.get('guest_phone', '').strip()
+            
+            if len(guest_name) < 3 or not re.match(r'^[A-Za-z\s]+$', guest_name):
+                return Response({"error": "Please provide a valid guest name containing only letters."}, status=status.HTTP_400_BAD_REQUEST)
+            if not re.match(r'^[6-9]\d{9}$', guest_phone):
+                return Response({"error": "Please provide a valid 10-digit mobile number."}, status=status.HTTP_400_BAD_REQUEST)
+
             active_tab = HotelTab.objects.filter(room_number=room_number, is_active=True).first()
 
             if not active_tab:
@@ -79,7 +106,20 @@ class CheckoutView(APIView):
             return Response({"order_id": bill.id, "status": bill.status}, status=status.HTTP_201_CREATED)
 
         else:
-            customer, _ = Customer.objects.get_or_create(phone=data.get('customer_phone'), defaults={'name': data.get('customer_name')})
+            customer_phone = data.get('customer_phone', '').strip()
+            
+            if Bill.objects.filter(customer__phone=customer_phone, status='Pending').exists():
+                return Response({"error": "You already have a pending order. Please wait for the kitchen to accept it before placing another."}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+            customer_name = data.get('customer_name', '').strip()
+            
+            if len(customer_name) < 3 or not re.match(r'^[A-Za-z\s]+$', customer_name):
+                return Response({"error": "Please provide a valid full name containing only letters."}, status=status.HTTP_400_BAD_REQUEST)
+            if not re.match(r'^[6-9]\d{9}$', customer_phone):
+                return Response({"error": "Please provide a valid 10-digit mobile number."}, status=status.HTTP_400_BAD_REQUEST)
+
+            customer, _ = Customer.objects.get_or_create(phone=customer_phone, defaults={'name': customer_name})
+            
             bill = Bill.objects.create(
                 customer=customer, order_type='Standard', items_json=data.get('items_json'),
                 total_amount=true_total_amount, status='Pending', idempotency_key=idempotency_key
@@ -103,20 +143,30 @@ class OrderListDetailView(APIView):
         return Response(BillSerializer(bills, many=True).data)
 
 class OrderStatusView(APIView):
-    # FIXED: Allow public customers to confirm their orders via PUT
     permission_classes = [AllowAny]
         
     def get(self, request, pk):
-        try: return Response({"status": Bill.objects.get(pk=pk).status})
-        except Bill.DoesNotExist: return Response(status=status.HTTP_404_NOT_FOUND)
+        try: 
+            return Response({"status": Bill.objects.get(pk=pk).status})
+        except Bill.DoesNotExist: 
+            return Response(status=status.HTTP_404_NOT_FOUND)
 
     def put(self, request, pk):
         try:
             bill = Bill.objects.get(pk=pk)
-            bill.status = request.data.get('status')
+            new_status = request.data.get('status')
+
+            if not request.user.is_authenticated:
+                if bill.status == 'Accepted' and new_status == 'Paid & Preparing':
+                    pass 
+                else:
+                    return Response({"error": "Unauthorized status transition."}, status=status.HTTP_403_FORBIDDEN)
+
+            bill.status = new_status
             bill.save()
             async_to_sync(get_channel_layer().group_send)(f"order_{bill.id}", {"type": "order_status_message", "status": bill.status})
             return Response({"status": bill.status})
+            
         except Bill.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
@@ -128,9 +178,21 @@ class BookingViewSet(viewsets.ModelViewSet):
         if self.action in ['create', 'retrieve']:
             return [AllowAny()]
         return [IsAuthenticated()]
+        
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if request.user.is_authenticated:
+            serializer = self.get_serializer(instance)
+            return Response(serializer.data)
+        return Response({"status": instance.status})
     
     def perform_create(self, serializer):
-        booking = serializer.save()
+        booking_date = serializer.validated_data.get('date')
+        if booking_date and booking_date < date.today():
+            raise ValidationError({"error": "Cannot book a table in the past."})
+        
+        booking = serializer.save(status='Pending')
+        
         trigger_admin_websocket('booking')
         send_background_notification("EMAIL_BOOKING_RECEIVED", booking.email)
 
@@ -170,7 +232,7 @@ class ReviewViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated()]
     
     def perform_create(self, serializer):
-        serializer.save()
+        serializer.save(is_approved=False)
         trigger_admin_websocket('review')
 
 class HotelTabViewSet(viewsets.ModelViewSet):
