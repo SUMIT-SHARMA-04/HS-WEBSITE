@@ -2,12 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast, { Toaster } from 'react-hot-toast';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { fetchWithAuth } from '@/utils/api'; 
 import { 
   Utensils, CalendarDays, MonitorSmartphone, Search, RefreshCw, 
   CheckCircle, XCircle, ChefHat, Printer, Trash2, 
   Plus, Edit2, ClipboardList, Activity, LogOut, TrendingUp, 
-  IndianRupee, Bed, Mail, Clock, Star, Volume2, VolumeX 
+  IndianRupee, Bed, Mail, Clock, Star, Volume2, VolumeX, Layers
 } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -20,16 +19,56 @@ export default function Admin() {
   const [orderSearch, setOrderSearch] = useState('');
   
   const [isEditingMenu, setIsEditingMenu] = useState(false);
-  const [menuForm, setMenuForm] = useState({ id: null, name: '', category: '', price: '', img: '', is_available: true });
+  const emptyMenu = { id: null, name: '', category: '', price: '', img: '', is_available: true };
+  const [menuForm, setMenuForm] = useState(emptyMenu);
+  
+  const [menuFormMode, setMenuFormMode] = useState('standard'); 
+  const [comboItems, setComboItems] = useState([]);
 
   const [posItems, setPosItems] = useState([]);
   const [printData, setPrintData] = useState(null);
 
-  const [audioEnabled, setAudioEnabled] = useState(() => {
-    return localStorage.getItem('hsc_admin_audio') === 'true';
-  });
-  
+  const [audioEnabled, setAudioEnabled] = useState(() => localStorage.getItem('hsc_admin_audio') === 'true');
   const audioRef = useRef(new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3')); 
+
+  // =========================================================================
+  // STRICT SECURE API INTERCEPTOR
+  // Automatically handles JWT Token Refreshing and JSON Content-Types
+  // =========================================================================
+  const secureApiCall = async (url, options = {}) => {
+    let token = localStorage.getItem('admin_access_token');
+    let headers = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    };
+    
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    let res = await fetch(url, { ...options, headers });
+    
+    // If the token expired mid-session, automatically refresh it and retry the action
+    if (res.status === 401 || res.status === 403) {
+      const refresh = localStorage.getItem('admin_refresh_token');
+      if (refresh) {
+        const refreshRes = await fetch(`${API_BASE}/api/token/refresh/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh })
+        });
+        
+        if (refreshRes.ok) {
+          const tokenData = await refreshRes.json();
+          localStorage.setItem('admin_access_token', tokenData.access);
+          headers['Authorization'] = `Bearer ${tokenData.access}`;
+          res = await fetch(url, { ...options, headers }); // Retry original action
+        } else {
+          localStorage.clear();
+          navigate('/admin-login');
+        }
+      }
+    }
+    return res;
+  };
 
   const toggleAudio = () => {
     const newState = !audioEnabled;
@@ -70,12 +109,12 @@ export default function Admin() {
   const loadData = async () => {
     try {
       const [o, b, m, h, msg, r] = await Promise.all([
-        fetchWithAuth(`${API_BASE}/orders/`).then(res => res.json()),
-        fetchWithAuth(`${API_BASE}/bookings/`).then(res => res.json()),
-        fetch(`${API_BASE}/menu/`).then(res => res.json()),
-        fetchWithAuth(`${API_BASE}/hotel-tabs/`).then(res => res.json()),
-        fetchWithAuth(`${API_BASE}/contact/`).then(res => res.json()),
-        fetchWithAuth(`${API_BASE}/reviews/`).then(res => res.json())
+        secureApiCall(`${API_BASE}/orders/`).then(res => res.json()),
+        secureApiCall(`${API_BASE}/bookings/`).then(res => res.json()),
+        secureApiCall(`${API_BASE}/menu/`).then(res => res.json()),
+        secureApiCall(`${API_BASE}/hotel-tabs/`).then(res => res.json()),
+        secureApiCall(`${API_BASE}/contact/`).then(res => res.json()),
+        secureApiCall(`${API_BASE}/reviews/`).then(res => res.json())
       ]);
       setData({ orders: o, bookings: b, menu: m, hotel: h, messages: msg, reviews: r });
     } catch (e) { 
@@ -100,19 +139,33 @@ export default function Admin() {
     return () => ws.close();
   }, [audioEnabled]);
 
-  const handleAction = async (url, method, payload, successMsg) => {
-    const options = { method };
-    if (payload) {
-      options.body = JSON.stringify(payload);
-      options.headers = { 'Content-Type': 'application/json' };
+  useEffect(() => {
+    if (menuFormMode === 'combo' && !isEditingMenu) {
+      if (comboItems.length > 0) {
+        const autoName = comboItems.map(i => i.name.split(' ')[0]).join(' + ') + ' Combo';
+        setMenuForm(prev => ({ ...prev, name: autoName }));
+      } else {
+        setMenuForm(prev => ({ ...prev, name: '' }));
+      }
     }
-    
-    const res = await fetchWithAuth(url, options);
-    if (res.ok) { 
-      toast.success(successMsg); 
-      loadData(); 
-    } else {
-      toast.error("Action failed");
+  }, [comboItems, menuFormMode, isEditingMenu]);
+
+  const handleAction = async (url, method, payload, successMsg) => {
+    try {
+      const options = { method };
+      if (payload) options.body = JSON.stringify(payload);
+      
+      const res = await secureApiCall(url, options);
+      
+      if (res.ok) { 
+        toast.success(successMsg); 
+        loadData(); 
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        toast.error(errData.error || `Action failed (${res.status})`);
+      }
+    } catch (error) {
+      toast.error("Network connection error.");
     }
   };
 
@@ -121,15 +174,25 @@ export default function Admin() {
     const method = isEditingMenu ? 'PUT' : 'POST';
     const url = isEditingMenu ? `${API_BASE}/menu/${menuForm.id}/` : `${API_BASE}/menu/`;
     
-    const res = await fetchWithAuth(url, { method, body: JSON.stringify(menuForm), headers: {'Content-Type': 'application/json'} });
+    const res = await secureApiCall(url, { method, body: JSON.stringify(menuForm) });
     if (res.ok) {
       toast.success(isEditingMenu ? "Menu item updated!" : "New item added!");
-      setMenuForm({ id: null, name: '', category: '', price: '', img: '', is_available: true });
+      setMenuForm(emptyMenu);
+      setComboItems([]);
+      setMenuFormMode('standard');
       setIsEditingMenu(false);
       loadData();
     } else {
       toast.error("Failed to save menu item");
     }
+  };
+
+  const toggleComboItem = (item) => {
+    setComboItems(prev => {
+      const exists = prev.find(i => i.id === item.id);
+      if (exists) return prev.filter(i => i.id !== item.id);
+      return [...prev, item];
+    });
   };
 
   const addToPOS = (menuItem) => {
@@ -156,45 +219,25 @@ export default function Admin() {
     
     try {
       const payload = {
-        order_type: 'Standard',
-        customer_name: 'Walk-in Customer (POS)',
-        customer_phone: 'N/A',
-        items_json: JSON.stringify(posItems),
-        total_amount: posTotal,
-        idempotency_key: crypto.randomUUID()
+        order_type: 'Standard', customer_name: 'Walk-in Customer (POS)', customer_phone: 'N/A',
+        items_json: JSON.stringify(posItems), total_amount: posTotal, idempotency_key: crypto.randomUUID()
       };
       
-      const response = await fetchWithAuth(`${API_BASE}/orders/checkout/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+      const response = await secureApiCall(`${API_BASE}/orders/checkout/`, {
+        method: 'POST', body: JSON.stringify(payload)
       });
       
       if (response.ok) {
         const orderData = await response.json();
         
-        await fetchWithAuth(`${API_BASE}/orders/${orderData.order_id}/status/`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'Completed' })
+        await secureApiCall(`${API_BASE}/orders/${orderData.order_id}/status/`, {
+          method: 'PUT', body: JSON.stringify({ status: 'Completed' })
         });
         
-        setPrintData({
-          title: 'Standalone Bill',
-          subtitle: 'Walk-in Customer',
-          items: posItems,
-          total: posTotal
-        });
-        
-        setTimeout(() => {
-          window.print();
-          setPosItems([]);
-          loadData();
-        }, 500);
+        setPrintData({ title: 'Standalone Bill', subtitle: 'Walk-in Customer', items: posItems, total: posTotal });
+        setTimeout(() => { window.print(); setPosItems([]); loadData(); }, 500);
       }
-    } catch (error) {
-      toast.error("Failed to save POS order to database.");
-    }
+    } catch (error) { toast.error("Failed to save POS order to database."); }
   };
 
   const handleHotelCheckout = async (tab, room) => {
@@ -208,29 +251,17 @@ export default function Admin() {
       grandTotal += parseFloat(o.total_amount);
       const items = JSON.parse(o.items_json || '[]');
       items.forEach(item => {
-        if (combinedItems[item.name]) {
-          combinedItems[item.name].quantity += (item.quantity || 1);
-        } else {
-          combinedItems[item.name] = { ...item, quantity: item.quantity || 1 };
-        }
+        if (combinedItems[item.name]) combinedItems[item.name].quantity += (item.quantity || 1);
+        else combinedItems[item.name] = { ...item, quantity: item.quantity || 1 };
       });
     });
 
-    setPrintData({
-      title: `Room ${room} Folio`,
-      subtitle: `Guest: ${tab.guest_name}`,
-      items: Object.values(combinedItems),
-      total: grandTotal
-    });
-
+    setPrintData({ title: `Room ${room} Folio`, subtitle: `Guest: ${tab.guest_name}`, items: Object.values(combinedItems), total: grandTotal });
     await handleAction(`${API_BASE}/hotel-tabs/${tab.id}/`, 'PATCH', {is_active: false}, `Room ${room} Checked Out successfully`);
     setTimeout(() => window.print(), 500);
   };
 
-  const handleLogout = () => {
-    localStorage.clear(); 
-    navigate('/admin-login');
-  };
+  const handleLogout = () => { localStorage.clear(); navigate('/admin-login'); };
 
   const pending = {
     o: data.orders.filter(x => x.status === 'Pending').length,
@@ -550,29 +581,63 @@ export default function Admin() {
                     <div className="bg-white p-6 rounded-2xl shadow-lg border border-cream-200 sticky top-8">
                       <h3 className="font-serif text-xl font-bold mb-4 flex items-center gap-2">
                         {isEditingMenu ? <Edit2 className="w-5 h-5 text-blue-500"/> : <Plus className="w-5 h-5 text-gold-500"/>} 
-                        {isEditingMenu ? 'Edit Item' : 'Add New Item'}
+                        {isEditingMenu ? 'Edit Menu Item' : 'Add to Menu'}
                       </h3>
+
+                      {!isEditingMenu && (
+                        <div className="flex gap-2 mb-6 p-1 bg-cream-100 rounded-lg">
+                          <button onClick={() => { setMenuFormMode('standard'); setMenuForm(emptyMenu); setComboItems([]); }} className={`flex-1 py-2 text-xs font-bold uppercase rounded-md transition-all ${menuFormMode === 'standard' ? 'bg-white shadow text-brown-900' : 'text-brown-500'}`}>Standard Item</button>
+                          <button onClick={() => { setMenuFormMode('combo'); setMenuForm({...emptyMenu, category: 'Combos & Offers'}); }} className={`flex-1 py-2 text-xs font-bold uppercase rounded-md transition-all flex items-center justify-center gap-1 ${menuFormMode === 'combo' ? 'bg-white shadow text-gold-600' : 'text-brown-500'}`}>
+                            <Layers className="w-3 h-3" /> Combo Builder
+                          </button>
+                        </div>
+                      )}
+
                       <form onSubmit={handleMenuSubmit} className="space-y-4">
+                        {menuFormMode === 'combo' && !isEditingMenu && (
+                          <div className="mb-4 border border-gold-200 bg-gold-50/30 rounded-xl p-4">
+                            <label className="block text-xs font-bold text-brown-700 uppercase mb-2">Select Items to Combine</label>
+                            <div className="max-h-40 overflow-y-auto space-y-2 pr-2">
+                              {data.menu.filter(m => m.category !== 'Combos & Offers').map(item => (
+                                <label key={item.id} className="flex items-center gap-3 p-2 bg-white rounded-lg border border-cream-200 cursor-pointer hover:border-gold-300 transition-colors">
+                                  <input type="checkbox" checked={comboItems.some(i => i.id === item.id)} onChange={() => toggleComboItem(item)} className="accent-gold-500 w-4 h-4 rounded" />
+                                  <span className="text-sm font-medium text-brown-900 truncate">{item.name}</span>
+                                  <span className="ml-auto text-xs font-bold text-brown-500">₹{item.price}</span>
+                                </label>
+                              ))}
+                            </div>
+                            {comboItems.length > 0 && (
+                              <div className="mt-4 pt-3 border-t border-gold-200 flex justify-between items-center">
+                                <span className="text-xs font-bold uppercase text-brown-600">Original Total Value:</span>
+                                <span className="text-sm font-black text-red-500 line-through">₹{comboItems.reduce((s, i) => s + parseFloat(i.price), 0)}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         <div>
-                          <label className="block text-xs font-medium text-brown-500 uppercase mb-1">Item Name</label>
+                          <label className="block text-xs font-medium text-brown-500 uppercase mb-1">Item / Combo Name</label>
                           <input required type="text" value={menuForm.name} onChange={e => setMenuForm({...menuForm, name: e.target.value})} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-1 focus:ring-gold-400" />
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-brown-500 uppercase mb-1">Category</label>
-                          <input required type="text" placeholder="e.g. Combos & Offers" value={menuForm.category} onChange={e => setMenuForm({...menuForm, category: e.target.value})} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-1 focus:ring-gold-400" />
+                          <input required type="text" readOnly={menuFormMode === 'combo' && !isEditingMenu} placeholder="e.g. Starters" value={menuForm.category} onChange={e => setMenuForm({...menuForm, category: e.target.value})} className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-1 focus:ring-gold-400 ${menuFormMode === 'combo' && !isEditingMenu ? 'bg-gray-100 text-gray-500' : ''}`} />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-brown-500 uppercase mb-1">Price (₹)</label>
-                          <input required type="number" value={menuForm.price} onChange={e => setMenuForm({...menuForm, price: e.target.value})} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-1 focus:ring-gold-400" />
+                          <label className="block text-xs font-medium text-brown-500 uppercase mb-1">{menuFormMode === 'combo' ? 'Discounted Combo Price (₹)' : 'Price (₹)'}</label>
+                          <input required type="number" min="1" value={menuForm.price} onChange={e => setMenuForm({...menuForm, price: e.target.value})} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-1 focus:ring-gold-400" />
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-brown-500 uppercase mb-1">Image URL</label>
                           <input required type="url" value={menuForm.img} onChange={e => setMenuForm({...menuForm, img: e.target.value})} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-1 focus:ring-gold-400" />
                         </div>
+                        
                         <div className="flex gap-2 pt-2">
-                          <button type="submit" className="flex-1 bg-brown-900 text-white py-2 rounded-lg hover:bg-brown-800 transition">{isEditingMenu ? 'Update Item' : 'Add Item'}</button>
+                          <button type="submit" className="flex-1 bg-brown-900 text-white font-bold py-3 rounded-lg hover:bg-brown-800 transition">
+                            {isEditingMenu ? 'Update Item' : menuFormMode === 'combo' ? 'Launch New Combo' : 'Add Item'}
+                          </button>
                           {isEditingMenu && (
-                            <button type="button" onClick={() => { setIsEditingMenu(false); setMenuForm({ id: null, name: '', category: '', price: '', img: '', is_available: true }); }} className="px-4 py-2 border border-brown-300 rounded-lg text-sm">Cancel</button>
+                            <button type="button" onClick={() => { setIsEditingMenu(false); setMenuForm(emptyMenu); }} className="px-4 py-2 border border-brown-300 rounded-lg text-sm font-bold">Cancel</button>
                           )}
                         </div>
                       </form>
@@ -586,26 +651,29 @@ export default function Admin() {
                           <tr><th className="p-4 font-medium">Image</th><th className="p-4 font-medium">Name & Category</th><th className="p-4 font-medium">Price</th><th className="p-4 font-medium text-right">Actions</th></tr>
                         </thead>
                         <tbody className="divide-y divide-cream-200">
-                          {data.menu.map(item => (
-                            <tr key={item.id} className={`hover:bg-cream-50 ${!item.is_available ? 'opacity-60 bg-gray-50' : ''}`}>
-                              <td className="p-4"><img src={item.img} alt={item.name} className="w-12 h-12 object-cover rounded-md" /></td>
-                              <td className="p-4">
-                                <p className="font-bold">{item.name}</p>
-                                <div className="flex gap-2 mt-1">
-                                  <span className="text-xs text-brown-500 bg-cream-100 px-2 py-0.5 rounded-full">{item.category}</span>
-                                  {!item.is_available && <span className="text-xs text-red-700 bg-red-100 px-2 py-0.5 rounded-full font-bold">Out of Stock</span>}
-                                </div>
-                              </td>
-                              <td className="p-4 font-bold text-gold-700">₹{item.price}</td>
-                              <td className="p-4 text-right space-x-2">
-                                <button onClick={() => handleAction(`${API_BASE}/menu/${item.id}/`, 'PUT', {...item, is_available: !item.is_available}, 'Inventory Updated')} className={`p-2 rounded-lg ${item.is_available ? 'text-green-600 bg-green-50 hover:bg-green-100' : 'text-amber-600 bg-amber-50 hover:bg-amber-100'}`} title={item.is_available ? "Mark Out of Stock" : "Mark Available"}>
-                                  <RefreshCw className="w-4 h-4" />
-                                </button>
-                                <button onClick={() => {setMenuForm(item); setIsEditingMenu(true); window.scrollTo({top: 0, behavior: 'smooth'});}} className="p-2 text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100"><Edit2 className="w-4 h-4" /></button>
-                                <button onClick={() => handleAction(`${API_BASE}/menu/${item.id}/`, 'DELETE', null, 'Item deleted')} className="p-2 text-red-600 bg-red-50 rounded-lg hover:bg-red-100"><Trash2 className="w-4 h-4" /></button>
-                              </td>
-                            </tr>
-                          ))}
+                          {data.menu.map(item => {
+                            const isCombo = item.category.toLowerCase().includes('combo');
+                            return (
+                              <tr key={item.id} className={`hover:bg-cream-50 transition-colors ${!item.is_available ? 'opacity-60 bg-gray-50' : ''}`}>
+                                <td className="p-4"><img src={item.img} alt={item.name} className="w-12 h-12 object-cover rounded-md" /></td>
+                                <td className="p-4">
+                                  <p className="font-bold text-brown-900">{item.name}</p>
+                                  <div className="flex gap-2 mt-1 items-center">
+                                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${isCombo ? 'bg-gold-100 text-gold-700' : 'bg-cream-200 text-brown-500'}`}>{item.category}</span>
+                                    {!item.is_available && <span className="text-[10px] text-red-700 bg-red-100 px-2 py-0.5 rounded-full font-bold uppercase">Out of Stock</span>}
+                                  </div>
+                                </td>
+                                <td className="p-4 font-bold text-gold-700 text-lg">₹{item.price}</td>
+                                <td className="p-4 text-right space-x-2">
+                                  <button onClick={() => handleAction(`${API_BASE}/menu/${item.id}/`, 'PUT', {...item, is_available: !item.is_available}, 'Inventory Updated')} className={`p-2 rounded-lg ${item.is_available ? 'text-green-600 bg-green-50 hover:bg-green-100' : 'text-amber-600 bg-amber-50 hover:bg-amber-100'}`} title={item.is_available ? "Mark Out of Stock" : "Mark Available"}>
+                                    <RefreshCw className="w-4 h-4" />
+                                  </button>
+                                  <button onClick={() => {setMenuForm(item); setIsEditingMenu(true); window.scrollTo({top: 0, behavior: 'smooth'});}} className="p-2 text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100"><Edit2 className="w-4 h-4" /></button>
+                                  <button onClick={() => handleAction(`${API_BASE}/menu/${item.id}/`, 'DELETE', null, 'Item deleted')} className="p-2 text-red-600 bg-red-50 rounded-lg hover:bg-red-100"><Trash2 className="w-4 h-4" /></button>
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>

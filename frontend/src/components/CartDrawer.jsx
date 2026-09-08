@@ -6,6 +6,8 @@ import toast from 'react-hot-toast';
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const WS_BASE = API_BASE.replace(/^http/, 'ws');
 
+const VALID_ROOMS = ['101', '102', '103', '104', '105', '106', '107', '108'];
+
 export default function CartDrawer() {
   const { cart, removeFromCart, updateQuantity, isCartOpen, setIsCartOpen, clearCart } = useCart();
   const [showCheckoutForm, setShowCheckoutForm] = useState(false);
@@ -16,7 +18,7 @@ export default function CartDrawer() {
   const [liveOrderId, setLiveOrderId] = useState(null);
   const [orderStatus, setOrderStatus] = useState('');
   
-  const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
 
   const urlParams = new URLSearchParams(window.location.search);
   const roomNumber = urlParams.get('room');
@@ -26,7 +28,8 @@ export default function CartDrawer() {
 
   useEffect(() => {
     const savedOrderId = localStorage.getItem('my_active_order');
-    if (savedOrderId) {
+    // Double check it's not a tampered link before loading the tracker
+    if (savedOrderId && (!isHotelGuest || VALID_ROOMS.includes(roomNumber))) {
       setLiveOrderId(savedOrderId);
       setCheckoutStatus('tracking');
       setIsCartOpen(true);
@@ -58,6 +61,13 @@ export default function CartDrawer() {
 
   const handlePlaceOrder = async (e) => {
     e.preventDefault();
+
+    // Fast API fail if they bypass the App trap somehow
+    if (isHotelGuest && !VALID_ROOMS.includes(roomNumber)) {
+      toast.error(`Invalid Room Number (${roomNumber}).`);
+      return;
+    }
+
     setCheckoutStatus('loading');
 
     const payload = isHotelGuest ? {
@@ -88,10 +98,10 @@ export default function CartDrawer() {
       setShowCheckoutForm(false);
       clearCart();
       
-      // FIXED: Clear the customer details from memory so the next user has a blank form
       setCustomerDetails({ name: '', phone: '' }); 
-      
       localStorage.setItem('my_active_order', data.order_id);
+      
+      setIdempotencyKey(crypto.randomUUID());
       toast.success("Order sent to kitchen! Awaiting confirmation.");
 
     } catch (error) {
@@ -124,7 +134,6 @@ export default function CartDrawer() {
     setOrderStatus('');
     setIsCartOpen(false);
     
-    // FIXED: Ensure details are wiped even if they cancel tracking
     setCustomerDetails({ name: '', phone: '' }); 
     localStorage.removeItem('my_active_order');
   };
@@ -217,7 +226,6 @@ export default function CartDrawer() {
                 </div>
               )}
 
-              {/* PAY AT COUNTER CONFIRMATION */}
               {orderStatus === 'Accepted' && !isHotelGuest && (
                 <div className="mt-10 bg-gold-50 border border-gold-200 p-6 rounded-2xl text-center shadow-md animate-slide-up">
                   <p className="text-brown-900 font-bold mb-2 text-lg">Kitchen Approved!</p>
@@ -281,13 +289,49 @@ export default function CartDrawer() {
                 {isHotelGuest ? (
                   <>
                     <p className="text-sm text-brown-600 font-bold uppercase tracking-wider mb-2">Room {roomNumber} Folio Verification</p>
-                    <input required type="text" placeholder="Registered Guest Name" value={customerDetails.name} onChange={e => setCustomerDetails({...customerDetails, name: e.target.value})} className="w-full px-4 py-4 bg-cream-50 border border-cream-200 rounded-xl text-sm font-medium focus:outline-none focus:border-gold-400 focus:bg-white transition-colors" />
-                    <input required type="tel" placeholder="Registered Phone Number" value={customerDetails.phone} onChange={e => setCustomerDetails({...customerDetails, phone: e.target.value})} className="w-full px-4 py-4 bg-cream-50 border border-cream-200 rounded-xl text-sm font-medium focus:outline-none focus:border-gold-400 focus:bg-white transition-colors" />
+                    <input 
+                      required 
+                      type="text" 
+                      pattern="^[A-Za-z\s]{3,50}$"
+                      title="Name must contain only letters and spaces (minimum 3 characters)"
+                      placeholder="Registered Guest Name" 
+                      value={customerDetails.name} 
+                      onChange={e => setCustomerDetails({...customerDetails, name: e.target.value})} 
+                      className="w-full px-4 py-4 bg-cream-50 border border-cream-200 rounded-xl text-sm font-medium focus:outline-none focus:border-gold-400 focus:bg-white transition-colors" 
+                    />
+                    <input 
+                      required 
+                      type="tel" 
+                      pattern="^[6-9]\d{9}$"
+                      title="Please enter a valid 10-digit mobile number"
+                      placeholder="Registered Phone Number (10 digits)" 
+                      value={customerDetails.phone} 
+                      onChange={e => setCustomerDetails({...customerDetails, phone: e.target.value})} 
+                      className="w-full px-4 py-4 bg-cream-50 border border-cream-200 rounded-xl text-sm font-medium focus:outline-none focus:border-gold-400 focus:bg-white transition-colors" 
+                    />
                   </>
                 ) : (
                   <>
-                    <input required type="text" placeholder="Your Full Name" value={customerDetails.name} onChange={e => setCustomerDetails({...customerDetails, name: e.target.value})} className="w-full px-4 py-3 bg-cream-50 border border-cream-200 rounded-xl text-sm font-medium focus:outline-none focus:border-gold-400 focus:bg-white transition-colors" />
-                    <input required type="tel" placeholder="Phone Number (Required)" value={customerDetails.phone} onChange={e => setCustomerDetails({...customerDetails, phone: e.target.value})} className="w-full px-4 py-3 bg-cream-50 border border-cream-200 rounded-xl text-sm font-medium focus:outline-none focus:border-gold-400 focus:bg-white transition-colors" />
+                    <input 
+                      required 
+                      type="text" 
+                      pattern="^[A-Za-z\s]{3,50}$"
+                      title="Name must contain only letters and spaces (minimum 3 characters)"
+                      placeholder="Your Full Name" 
+                      value={customerDetails.name} 
+                      onChange={e => setCustomerDetails({...customerDetails, name: e.target.value})} 
+                      className="w-full px-4 py-3 bg-cream-50 border border-cream-200 rounded-xl text-sm font-medium focus:outline-none focus:border-gold-400 focus:bg-white transition-colors" 
+                    />
+                    <input 
+                      required 
+                      type="tel" 
+                      pattern="^[6-9]\d{9}$"
+                      title="Please enter a valid 10-digit mobile number"
+                      placeholder="Phone Number (10 digits)" 
+                      value={customerDetails.phone} 
+                      onChange={e => setCustomerDetails({...customerDetails, phone: e.target.value})} 
+                      className="w-full px-4 py-3 bg-cream-50 border border-cream-200 rounded-xl text-sm font-medium focus:outline-none focus:border-gold-400 focus:bg-white transition-colors" 
+                    />
                   </>
                 )}
                 <div className="flex gap-3 pt-3">

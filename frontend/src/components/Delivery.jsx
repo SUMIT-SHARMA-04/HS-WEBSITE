@@ -25,7 +25,7 @@ export default function Delivery() {
             <span className="relative z-10 font-bold text-lg tracking-wide">Order on Zomato</span>
             <ExternalLink className="relative z-10 w-5 h-5 opacity-70 group-hover:opacity-100 transition-opacity" />
           </a>
-          <a href="https://www.swiggy.com/" target="_blank" rel="noopener noreferrer" className="w-full sm:w-auto group relative overflow-hidden bg-[#FC8019] text-white px-8 py-4 rounded-2xl flex items-center justify-center gap-3 shadow-xl hover:-translate-y-1 transition-all duration-300">
+          <a href="https://www.swiggy.com/city/jaipur/h-s-bhojnalaya-and-cafe-vidhyadhar-nagar-rest1081614" target="_blank" rel="noopener noreferrer" className="w-full sm:w-auto group relative overflow-hidden bg-[#FC8019] text-white px-8 py-4 rounded-2xl flex items-center justify-center gap-3 shadow-xl hover:-translate-y-1 transition-all duration-300">
             <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-in-out" />
             <span className="relative z-10 font-bold text-lg tracking-wide">Order on Swiggy</span>
             <ExternalLink className="relative z-10 w-5 h-5 opacity-70 group-hover:opacity-100 transition-opacity" />
