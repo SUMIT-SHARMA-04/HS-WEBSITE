@@ -1,3 +1,4 @@
+import uuid
 from django.db import models
 from django.core.validators import MaxValueValidator
 
@@ -23,6 +24,7 @@ class HotelTab(models.Model):
         return f"Room {self.room_number} ({self.guest_name}) - {'Active' if self.is_active else 'Closed'}"
 
 class Bill(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     STATUS_CHOICES = (
         ('Pending', 'Pending'),
         ('Accepted', 'Accepted'),
@@ -43,7 +45,7 @@ class Bill(models.Model):
         indexes = [models.Index(fields=['status', 'created_at'])]
 
     def __str__(self):
-        return f"Bill #{self.id} - {'Room '+self.hotel_tab.room_number if self.order_type == 'Hotel' else self.customer.name}"
+        return f"Bill #{str(self.id)[:8]} - {'Room '+self.hotel_tab.room_number if self.order_type == 'Hotel' else self.customer.name}"
 
 class MenuItem(models.Model):
     name = models.CharField(max_length=150)
@@ -56,6 +58,7 @@ class MenuItem(models.Model):
         return self.name
 
 class Booking(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     customer_name = models.CharField(max_length=150)
     email = models.EmailField()
     customer_phone = models.CharField(max_length=20)

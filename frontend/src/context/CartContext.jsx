@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 
 const CartContext = createContext();
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export function CartProvider({ children }) {
   const [cart, setCart] = useState(() => {
@@ -26,6 +27,24 @@ export function CartProvider({ children }) {
   const [isCartOpen, setIsCartOpen] = useState(false);
 
   useEffect(() => {
+    if (cart.length > 0) {
+      fetch(`${API_BASE}/menu/`)
+        .then(res => res.json())
+        .then(data => {
+          const menuArray = Array.isArray(data) ? data : data.results || [];
+          setCart(prevCart => 
+            prevCart.map(cartItem => {
+              const latestItem = menuArray.find(m => m.id === cartItem.id);
+              return latestItem ? { ...cartItem, price: latestItem.price, name: latestItem.name } : cartItem;
+            })
+          );
+        })
+        .catch(() => console.log("Silent cart hydration failed."));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     localStorage.setItem('hsc_cart', JSON.stringify(cart));
   }, [cart]);
 
@@ -33,9 +52,7 @@ export function CartProvider({ children }) {
     setCart((prev) => {
       const existing = prev.find((i) => i.id === item.id);
       if (existing) {
-        return prev.map((i) =>
-          i.id === item.id ? { ...i, quantity: (i.quantity || 1) + 1 } : i
-        );
+        return prev.map((i) => i.id === item.id ? { ...i, quantity: (i.quantity || 1) + 1 } : i);
       }
       return [...prev, { ...item, quantity: 1 }];
     });
@@ -47,22 +64,19 @@ export function CartProvider({ children }) {
 
   const updateQuantity = (nameOrId, delta) => {
     setCart((prev) =>
-      prev
-        .map((item) => {
+      prev.map((item) => {
           if (item.name === nameOrId || item.id === nameOrId) {
             const newQty = (item.quantity || 1) + delta;
             return newQty > 0 ? { ...item, quantity: newQty } : null;
           }
           return item;
-        })
-        .filter(Boolean)
+        }).filter(Boolean)
     );
   };
 
   const clearCart = () => {
     setCart([]);
     localStorage.removeItem('hsc_cart');
-    // We intentionally keep hsc_room so they stay logged into their room folio
   };
 
   const clearRoom = () => {
@@ -73,20 +87,7 @@ export function CartProvider({ children }) {
   const cartCount = cart.reduce((sum, item) => sum + (item.quantity || 1), 0);
 
   return (
-    <CartContext.Provider
-      value={{
-        cart,
-        addToCart,
-        removeFromCart,
-        updateQuantity,
-        clearCart,
-        cartCount,
-        isCartOpen,
-        setIsCartOpen,
-        hotelRoom,
-        clearRoom
-      }}
-    >
+    <CartContext.Provider value={{ cart, addToCart, removeFromCart, updateQuantity, clearCart, cartCount, isCartOpen, setIsCartOpen, hotelRoom, clearRoom }}>
       {children}
     </CartContext.Provider>
   );

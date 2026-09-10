@@ -5,30 +5,24 @@ import toast from 'react-hot-toast';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const WS_BASE = API_BASE.replace(/^http/, 'ws');
-
 const VALID_ROOMS = ['101', '102', '103', '104', '105', '106', '107', '108'];
 
 export default function CartDrawer() {
   const { cart, removeFromCart, updateQuantity, isCartOpen, setIsCartOpen, clearCart } = useCart();
   const [showCheckoutForm, setShowCheckoutForm] = useState(false);
-  
   const [customerDetails, setCustomerDetails] = useState({ name: '', phone: '' });
-  
   const [checkoutStatus, setCheckoutStatus] = useState('idle');
   const [liveOrderId, setLiveOrderId] = useState(null);
   const [orderStatus, setOrderStatus] = useState('');
-  
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
 
   const urlParams = new URLSearchParams(window.location.search);
   const roomNumber = urlParams.get('room');
   const isHotelGuest = !!roomNumber;
-
   const cartTotal = cart.reduce((sum, item) => sum + (item.price * (item.quantity || 1)), 0);
 
   useEffect(() => {
     const savedOrderId = localStorage.getItem('my_active_order');
-    // Double check it's not a tampered link before loading the tracker
     if (savedOrderId && (!isHotelGuest || VALID_ROOMS.includes(roomNumber))) {
       setLiveOrderId(savedOrderId);
       setCheckoutStatus('tracking');
@@ -36,38 +30,37 @@ export default function CartDrawer() {
       
       fetch(`${API_BASE}/orders/${savedOrderId}/status/`)
         .then(res => res.json())
-        .then(data => {
-          if (data.status) {
-            setOrderStatus(data.status);
-          } else {
-            closeTracker();
-          }
-        })
+        .then(data => { if (data.status) { setOrderStatus(data.status); } else { closeTracker(); } })
         .catch(() => {});
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setIsCartOpen]);
 
   useEffect(() => {
     let ws;
+    let reconnectTimer;
+
     if (checkoutStatus === 'tracking' && liveOrderId) {
-      ws = new WebSocket(`${WS_BASE}/ws/orders/${liveOrderId}/`);
-      ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        setOrderStatus(data.status);
+      const connectWs = () => {
+        ws = new WebSocket(`${WS_BASE}/ws/orders/${liveOrderId}/`);
+        ws.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+          setOrderStatus(data.status);
+        };
+        ws.onclose = () => { reconnectTimer = setTimeout(connectWs, 3000); };
       };
+
+      connectWs();
     }
-    return () => { if (ws) ws.close(); };
+    return () => { 
+      clearTimeout(reconnectTimer);
+      if (ws) { ws.onclose = null; ws.close(); }
+    };
   }, [checkoutStatus, liveOrderId]);
 
   const handlePlaceOrder = async (e) => {
     e.preventDefault();
-
-    // Fast API fail if they bypass the App trap somehow
-    if (isHotelGuest && !VALID_ROOMS.includes(roomNumber)) {
-      toast.error(`Invalid Room Number (${roomNumber}).`);
-      return;
-    }
-
+    if (isHotelGuest && !VALID_ROOMS.includes(roomNumber)) return toast.error(`Invalid Room.`);
     setCheckoutStatus('loading');
 
     const payload = isHotelGuest ? {
@@ -79,12 +72,7 @@ export default function CartDrawer() {
     };
 
     try {
-      const response = await fetch(`${API_BASE}/orders/checkout/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
+      const response = await fetch(`${API_BASE}/orders/checkout/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const data = await response.json();
       if (!response.ok) {
         toast.error(data.error || 'Failed to place order');
@@ -97,35 +85,21 @@ export default function CartDrawer() {
       setCheckoutStatus('tracking');
       setShowCheckoutForm(false);
       clearCart();
-      
       setCustomerDetails({ name: '', phone: '' }); 
       localStorage.setItem('my_active_order', data.order_id);
-      
       setIdempotencyKey(crypto.randomUUID());
       toast.success("Order sent to kitchen! Awaiting confirmation.");
-
-    } catch (error) {
-      toast.error('Network error. Please try again.');
-      setCheckoutStatus('idle');
-    }
+    } catch (error) { toast.error('Network error. Please try again.'); setCheckoutStatus('idle'); }
   };
 
   const handleConfirmOrder = async () => {
     try {
-      const response = await fetch(`${API_BASE}/orders/${liveOrderId}/status/`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'Paid & Preparing' })
-      });
+      const response = await fetch(`${API_BASE}/orders/${liveOrderId}/status/`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'Paid & Preparing' }) });
       if (response.ok) {
         setOrderStatus('Paid & Preparing');
         toast.success("Order confirmed! Please pay at the counter.");
-      } else {
-        toast.error("Failed to confirm order. Please call the restaurant.");
-      }
-    } catch (error) {
-      toast.error("Network error. Please try again.");
-    }
+      } else toast.error("Failed to confirm order. Please call the restaurant.");
+    } catch (error) { toast.error("Network error. Please try again."); }
   };
 
   const closeTracker = () => {
@@ -133,7 +107,6 @@ export default function CartDrawer() {
     setLiveOrderId(null);
     setOrderStatus('');
     setIsCartOpen(false);
-    
     setCustomerDetails({ name: '', phone: '' }); 
     localStorage.removeItem('my_active_order');
   };
@@ -148,7 +121,6 @@ export default function CartDrawer() {
   const getStepState = (stepIndex) => {
     const sequence = ['Pending', 'Accepted', 'Paid & Preparing', 'Completed'];
     const currentIndex = sequence.indexOf(orderStatus);
-    
     if (orderStatus === 'Rejected') return 'rejected';
     if (currentIndex === stepIndex) return 'current';
     if (currentIndex > stepIndex) return 'completed';
@@ -160,7 +132,6 @@ export default function CartDrawer() {
   return (
     <>
       <div className="fixed inset-0 bg-black/60 z-50 backdrop-blur-sm transition-opacity" onClick={() => setIsCartOpen(false)} />
-      
       <div className="fixed right-0 top-0 h-full w-full max-w-md bg-cream-50 z-50 flex flex-col shadow-2xl animate-slide-left border-l border-gold-500/20">
         
         <div className="p-6 bg-brown-950 text-cream-100 flex items-center justify-between relative overflow-hidden">
@@ -170,13 +141,11 @@ export default function CartDrawer() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-6 hide-scrollbar">
-          
           {checkoutStatus === 'tracking' ? (
             <div className="py-2 animate-fade-in flex flex-col">
-              
               <div className="text-center mb-8">
-                <h3 className="font-serif text-3xl text-brown-900 font-bold tracking-tight mb-2">Order #{liveOrderId}</h3>
-                <p className="text-sm text-gold-600 font-medium tracking-widest uppercase">Live Status Tracking</p>
+                <h3 className="font-serif text-3xl text-brown-900 font-bold tracking-tight mb-2">Order Tracking</h3>
+                <p className="text-sm text-gold-600 font-medium tracking-widest uppercase">#{liveOrderId.substring(0,8)}</p>
               </div>
 
               {orderStatus === 'Rejected' ? (
@@ -188,33 +157,16 @@ export default function CartDrawer() {
               ) : (
                 <div className="relative pl-6">
                   <div className="absolute left-[47px] top-6 bottom-12 w-1 bg-cream-200 rounded-full"></div>
-                  
-                  <div className="absolute left-[47px] top-6 w-1 bg-gold-500 rounded-full transition-all duration-1000 ease-in-out" 
-                       style={{ 
-                         height: 
-                           orderStatus === 'Pending' ? '0%' : 
-                           orderStatus === 'Accepted' ? '33%' : 
-                           orderStatus === 'Paid & Preparing' ? '66%' : 
-                           '100%' 
-                       }}>
-                  </div>
-
+                  <div className="absolute left-[47px] top-6 w-1 bg-gold-500 rounded-full transition-all duration-1000 ease-in-out" style={{ height: orderStatus === 'Pending' ? '0%' : orderStatus === 'Accepted' ? '33%' : orderStatus === 'Paid & Preparing' ? '66%' : '100%' }}></div>
                   <div className="space-y-10">
                     {trackerSteps.map((step, index) => {
                       const state = getStepState(index);
                       const Icon = step.icon;
-
                       return (
                         <div key={step.id} className="relative flex items-center gap-6 z-10">
-                          <div className={`
-                            w-14 h-14 shrink-0 rounded-full flex items-center justify-center transition-all duration-700 ease-out border-4 border-cream-50
-                            ${state === 'completed' ? 'bg-gold-500 text-white scale-100 shadow-md' : ''}
-                            ${state === 'current' ? 'bg-gold-500 text-white shadow-[0_0_20px_rgba(212,175,55,0.6)] ring-4 ring-gold-100 scale-110' : ''}
-                            ${state === 'upcoming' ? 'bg-cream-200 text-brown-400 scale-95' : ''}
-                          `}>
+                          <div className={`w-14 h-14 shrink-0 rounded-full flex items-center justify-center transition-all duration-700 ease-out border-4 border-cream-50 ${state === 'completed' ? 'bg-gold-500 text-white scale-100 shadow-md' : ''} ${state === 'current' ? 'bg-gold-500 text-white shadow-[0_0_20px_rgba(212,175,55,0.6)] ring-4 ring-gold-100 scale-110' : ''} ${state === 'upcoming' ? 'bg-cream-200 text-brown-400 scale-95' : ''}`}>
                             <Icon className={`w-6 h-6 ${state === 'current' ? 'animate-pulse' : ''}`} />
                           </div>
-
                           <div className={`transition-all duration-500 ${state === 'upcoming' ? 'opacity-40 translate-x-2' : 'opacity-100 translate-x-0'}`}>
                             <h4 className={`font-bold tracking-wide ${state === 'current' ? 'text-gold-700 text-lg' : 'text-brown-900 text-base'}`}>{step.label}</h4>
                             <p className="text-xs text-brown-500 font-medium mt-1">{step.desc}</p>
@@ -230,29 +182,18 @@ export default function CartDrawer() {
                 <div className="mt-10 bg-gold-50 border border-gold-200 p-6 rounded-2xl text-center shadow-md animate-slide-up">
                   <p className="text-brown-900 font-bold mb-2 text-lg">Kitchen Approved!</p>
                   <p className="text-sm text-brown-600 mb-5 leading-relaxed">Your order has been reviewed. Click below to confirm and we will start preparing your food. Payment will be collected at the counter.</p>
-                  <button onClick={handleConfirmOrder} className="w-full btn-gold py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all">
-                    <ChefHat className="w-5 h-5" /> Confirm & Start Cooking
-                  </button>
+                  <button onClick={handleConfirmOrder} className="w-full btn-gold py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all"><ChefHat className="w-5 h-5" /> Confirm & Start Cooking</button>
                 </div>
               )}
-
-              <button onClick={closeTracker} className="mt-14 mx-auto block px-8 py-3 text-brown-500 bg-cream-100 hover:bg-cream-200 rounded-full text-sm font-bold tracking-wide transition-colors">
-                Dismiss Tracker
-              </button>
+              <button onClick={closeTracker} className="mt-14 mx-auto block px-8 py-3 text-brown-500 bg-cream-100 hover:bg-cream-200 rounded-full text-sm font-bold tracking-wide transition-colors">Dismiss Tracker</button>
             </div>
           ) : cart.length === 0 ? (
-            
             <div className="text-center py-20 animate-fade-in">
-              <div className="w-24 h-24 bg-cream-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                <ChefHat className="w-10 h-10 text-brown-300" />
-              </div>
+              <div className="w-24 h-24 bg-cream-100 rounded-full flex items-center justify-center mx-auto mb-6"><ChefHat className="w-10 h-10 text-brown-300" /></div>
               <p className="text-brown-500 font-medium mb-6 text-lg">Your cart is empty.</p>
-              <button onClick={() => setIsCartOpen(false)} className="btn-gold px-8 py-3 rounded-full font-bold shadow-md hover:-translate-y-1 transition-all">
-                Browse Menu
-              </button>
+              <button onClick={() => setIsCartOpen(false)} className="btn-gold px-8 py-3 rounded-full font-bold shadow-md hover:-translate-y-1 transition-all">Browse Menu</button>
             </div>
           ) : (
-            
             <div className="space-y-4">
               {cart.map((item) => (
                 <div key={item.id} className="flex gap-4 items-center bg-white p-3 rounded-2xl border border-cream-200 shadow-sm hover:shadow-md transition-shadow group">
@@ -275,63 +216,21 @@ export default function CartDrawer() {
 
         {cart.length > 0 && checkoutStatus !== 'tracking' && (
           <div className="border-t border-cream-200 p-6 bg-white space-y-5 shadow-[0_-10px_20px_rgba(0,0,0,0.02)]">
-            <div className="flex justify-between items-center font-serif text-2xl font-bold text-brown-900 mb-2">
-              <span>Total</span>
-              <span className="text-gold-600">₹{cartTotal}</span>
-            </div>
-            
+            <div className="flex justify-between items-center font-serif text-2xl font-bold text-brown-900 mb-2"><span>Total</span><span className="text-gold-600">₹{cartTotal}</span></div>
             {!showCheckoutForm ? (
-              <button onClick={() => setShowCheckoutForm(true)} className="w-full btn-gold py-4 rounded-2xl font-bold text-lg transition-all shadow-lg hover:shadow-xl hover:-translate-y-1">
-                Proceed to Checkout
-              </button>
+              <button onClick={() => setShowCheckoutForm(true)} className="w-full btn-gold py-4 rounded-2xl font-bold text-lg transition-all shadow-lg hover:shadow-xl hover:-translate-y-1">Proceed to Checkout</button>
             ) : (
               <form onSubmit={handlePlaceOrder} className="space-y-3 animate-slide-up">
                 {isHotelGuest ? (
                   <>
                     <p className="text-sm text-brown-600 font-bold uppercase tracking-wider mb-2">Room {roomNumber} Folio Verification</p>
-                    <input 
-                      required 
-                      type="text" 
-                      pattern="^[A-Za-z\s]{3,50}$"
-                      title="Name must contain only letters and spaces (minimum 3 characters)"
-                      placeholder="Registered Guest Name" 
-                      value={customerDetails.name} 
-                      onChange={e => setCustomerDetails({...customerDetails, name: e.target.value})} 
-                      className="w-full px-4 py-4 bg-cream-50 border border-cream-200 rounded-xl text-sm font-medium focus:outline-none focus:border-gold-400 focus:bg-white transition-colors" 
-                    />
-                    <input 
-                      required 
-                      type="tel" 
-                      pattern="^[6-9]\d{9}$"
-                      title="Please enter a valid 10-digit mobile number"
-                      placeholder="Registered Phone Number (10 digits)" 
-                      value={customerDetails.phone} 
-                      onChange={e => setCustomerDetails({...customerDetails, phone: e.target.value})} 
-                      className="w-full px-4 py-4 bg-cream-50 border border-cream-200 rounded-xl text-sm font-medium focus:outline-none focus:border-gold-400 focus:bg-white transition-colors" 
-                    />
+                    <input required type="text" pattern="^[A-Za-z\s]{3,50}$" title="Letters and spaces only (min 3 chars)" placeholder="Registered Guest Name" value={customerDetails.name} onChange={e => setCustomerDetails({...customerDetails, name: e.target.value})} className="w-full px-4 py-4 bg-cream-50 border border-cream-200 rounded-xl text-sm font-medium focus:outline-none focus:border-gold-400 focus:bg-white transition-colors" />
+                    <input required type="tel" pattern="^[6-9]\d{9}$" title="Valid 10-digit mobile number" placeholder="Registered Phone Number (10 digits)" value={customerDetails.phone} onChange={e => setCustomerDetails({...customerDetails, phone: e.target.value})} className="w-full px-4 py-4 bg-cream-50 border border-cream-200 rounded-xl text-sm font-medium focus:outline-none focus:border-gold-400 focus:bg-white transition-colors" />
                   </>
                 ) : (
                   <>
-                    <input 
-                      required 
-                      type="text" 
-                      pattern="^[A-Za-z\s]{3,50}$"
-                      title="Name must contain only letters and spaces (minimum 3 characters)"
-                      placeholder="Your Full Name" 
-                      value={customerDetails.name} 
-                      onChange={e => setCustomerDetails({...customerDetails, name: e.target.value})} 
-                      className="w-full px-4 py-3 bg-cream-50 border border-cream-200 rounded-xl text-sm font-medium focus:outline-none focus:border-gold-400 focus:bg-white transition-colors" 
-                    />
-                    <input 
-                      required 
-                      type="tel" 
-                      pattern="^[6-9]\d{9}$"
-                      title="Please enter a valid 10-digit mobile number"
-                      placeholder="Phone Number (10 digits)" 
-                      value={customerDetails.phone} 
-                      onChange={e => setCustomerDetails({...customerDetails, phone: e.target.value})} 
-                      className="w-full px-4 py-3 bg-cream-50 border border-cream-200 rounded-xl text-sm font-medium focus:outline-none focus:border-gold-400 focus:bg-white transition-colors" 
-                    />
+                    <input required type="text" pattern="^[A-Za-z\s]{3,50}$" title="Letters and spaces only (min 3 chars)" placeholder="Your Full Name" value={customerDetails.name} onChange={e => setCustomerDetails({...customerDetails, name: e.target.value})} className="w-full px-4 py-3 bg-cream-50 border border-cream-200 rounded-xl text-sm font-medium focus:outline-none focus:border-gold-400 focus:bg-white transition-colors" />
+                    <input required type="tel" pattern="^[6-9]\d{9}$" title="Valid 10-digit mobile number" placeholder="Phone Number (10 digits)" value={customerDetails.phone} onChange={e => setCustomerDetails({...customerDetails, phone: e.target.value})} className="w-full px-4 py-3 bg-cream-50 border border-cream-200 rounded-xl text-sm font-medium focus:outline-none focus:border-gold-400 focus:bg-white transition-colors" />
                   </>
                 )}
                 <div className="flex gap-3 pt-3">
