@@ -16,6 +16,7 @@ class BillSerializer(serializers.ModelSerializer):
     class Meta:
         model = Bill
         fields = '__all__'
+        depth = 1  # FIX: Ensures hotel_tab and customer are sent as full objects, not just IDs
 
 class MenuItemSerializer(serializers.ModelSerializer):
     class Meta:

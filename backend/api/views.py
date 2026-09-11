@@ -124,9 +124,12 @@ class CheckoutView(APIView):
             guest_name = data.get('guest_name', '').strip()
             guest_phone = data.get('guest_phone', '').strip()
             
-            if len(guest_name) < 3 or not re.match(r'^[A-Za-z\s]+$', guest_name):
-                return Response({"error": "Please provide a valid guest name containing only letters."}, status=status.HTTP_400_BAD_REQUEST)
-            if not re.match(r'^[6-9]\d{9}$', guest_phone):
+            # FIX: Updated regex to allow hyphens and dots in names
+            if len(guest_name) < 3 or not re.match(r'^[A-Za-z\s\-\.]+$', guest_name):
+                return Response({"error": "Please provide a valid guest name (letters, spaces, hyphens)."}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Note: Hotel guests might not have a phone number depending on your front desk flow, but if they do, validate it.
+            if guest_phone and not re.match(r'^[6-9]\d{9}$', guest_phone):
                 return Response({"error": "Please provide a valid 10-digit mobile number."}, status=status.HTTP_400_BAD_REQUEST)
 
             active_tab, created = HotelTab.objects.get_or_create(
@@ -148,8 +151,10 @@ class CheckoutView(APIView):
                 return Response({"error": "You already have a pending order."}, status=status.HTTP_429_TOO_MANY_REQUESTS)
 
             customer_name = data.get('customer_name', '').strip()
-            if len(customer_name) < 3 or not re.match(r'^[A-Za-z\s]+$', customer_name):
-                return Response({"error": "Please provide a valid full name containing only letters."}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # FIX: Updated regex to allow hyphens (like "Walk-in Customer")
+            if len(customer_name) < 3 or not re.match(r'^[A-Za-z\s\-\.]+$', customer_name):
+                return Response({"error": "Please provide a valid name (letters, spaces, hyphens)."}, status=status.HTTP_400_BAD_REQUEST)
             
             if customer_phone != '0000000000' and not re.match(r'^[6-9]\d{9}$', customer_phone):
                 return Response({"error": "Please provide a valid 10-digit mobile number."}, status=status.HTTP_400_BAD_REQUEST)
