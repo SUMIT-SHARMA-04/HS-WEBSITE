@@ -167,7 +167,7 @@ export default function Booking() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-brown-700 mb-1.5">Full Name <span className="text-red-500">*</span></label>
-                <input type="text" required value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Your name" className="w-full border border-cream-300 rounded-xl px-4 py-3 text-brown-900 form-field transition" />
+                <input type="text" required pattern="^[A-Za-z\s\-\.]{3,50}$" title="Name must contain only letters, spaces, hyphens, or dots (min 3 characters)" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Your name" className="w-full border border-cream-300 rounded-xl px-4 py-3 text-brown-900 form-field transition" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -176,7 +176,7 @@ export default function Booking() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-brown-700 mb-1.5">Phone <span className="text-red-500">*</span></label>
-                  <input type="tel" required value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="+1 (555) 000-0000" className="w-full border border-cream-300 rounded-xl px-4 py-3 text-brown-900 form-field transition text-sm" />
+                  <input type="tel" required pattern="^[6-9]\d{9}$" title="Please enter a valid 10-digit mobile number" value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="+1 (555) 000-0000" className="w-full border border-cream-300 rounded-xl px-4 py-3 text-brown-900 form-field transition text-sm" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">

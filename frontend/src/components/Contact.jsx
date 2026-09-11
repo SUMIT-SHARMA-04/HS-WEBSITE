@@ -4,12 +4,11 @@ import toast from 'react-hot-toast';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-// UPDATED: Localized to Jaipur, Rajasthan
 const info = [
   { icon: MapPin, label: 'Location', lines: ['C-Scheme', 'Jaipur, Rajasthan 302001'] },
   { icon: Phone, label: 'Phone', lines: ['+91 9182074513'] },
   { icon: Mail, label: 'Email', lines: ['hello@highspiritscafe.com'] },
-  { icon: Clock, label: 'Hours', lines: ['Mon – Fri: 12pm – 10pm', 'Sat – Sun: 11am – 11pm'] },
+  { icon: Clock, label: 'Hours', lines: ['Mon – Sun: 9am – 10pm'] }, // FIX: Updated hours
 ];
 
 export default function Contact() {
@@ -79,7 +78,6 @@ export default function Contact() {
               ))}
             </div>
 
-            {/* UPDATED: Google Maps redirect link for Jaipur */}
             <a 
               href="https://www.google.com/maps/dir/?api=1&destination=C-Scheme,+Jaipur,+Rajasthan" 
               target="_blank" rel="noopener noreferrer"
