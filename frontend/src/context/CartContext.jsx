@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect } from 'react';
 
 const CartContext = createContext();
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const VALID_ROOMS = ['101', '102', '103', '104', '105', '106', '107', '108'];
 
 export function CartProvider({ children }) {
   const [cart, setCart] = useState(() => {
@@ -17,10 +18,15 @@ export function CartProvider({ children }) {
   const [hotelRoom, setHotelRoom] = useState(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const room = urlParams.get('room');
-    if (room) {
+    
+    // Validate the room before saving it to local storage to prevent poisoning the session
+    if (room && VALID_ROOMS.includes(room)) {
       localStorage.setItem('hsc_room', room);
       return room;
+    } else if (room && !VALID_ROOMS.includes(room)) {
+      return null;
     }
+    
     return localStorage.getItem('hsc_room') || null;
   });
 

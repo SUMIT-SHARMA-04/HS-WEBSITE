@@ -37,8 +37,8 @@ export default function Admin() {
   const audioEnabledRef = useRef(audioEnabled);
   useEffect(() => { audioEnabledRef.current = audioEnabled; }, [audioEnabled]);
 
-  const singleAlertAudio = useRef(new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3')); 
-  const continuousAlarmAudio = useRef(new Audio('https://assets.mixkit.co/active_storage/sfx/995/995-preview.mp3'));
+  const singleAlertAudio = useRef(new Audio('https://assets.mixkit.co/active_storage/sfx/1110/1110-preview.mp3')); 
+  const continuousAlarmAudio = useRef(new Audio('https://assets.mixkit.co/active_storage/sfx/1114/1114-preview.mp3'));
 
   const pending = {
     o: data.orders.filter(x => x.status === 'Pending').length,
@@ -56,6 +56,7 @@ export default function Admin() {
     return () => window.removeEventListener('afterprint', handleAfterPrint);
   }, []);
 
+  // Continuous looping audio enabled
   useEffect(() => {
     continuousAlarmAudio.current.loop = true;
     const hasUrgentPending = pending.o > 0 || pending.b > 0;
@@ -107,11 +108,11 @@ export default function Admin() {
     
     if (newState) {
       singleAlertAudio.current.play().catch(e => console.log("Audio unlock failed", e));
-      toast.success("Audio Alarms Enabled!");
+      toast.success("Audio Notifications Enabled!");
     } else {
       continuousAlarmAudio.current.pause();
       continuousAlarmAudio.current.currentTime = 0;
-      toast.success("Audio Alarms Muted");
+      toast.success("Audio Notifications Muted");
     }
   };
 
@@ -251,7 +252,6 @@ export default function Admin() {
 
   const posTotal = posItems.reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity), 0);
 
-  // FIX 1: Pass 'e' to prevent default form submission
   const handlePOSPrint = async (e) => {
     e.preventDefault();
     if (posItems.length === 0) return toast.error("Add items to print bill");
@@ -281,7 +281,6 @@ export default function Admin() {
           total: posTotal 
         });
         
-        // FIX 2: Forcibly silence the buzzer immediately before the print dialog opens
         continuousAlarmAudio.current.pause();
         continuousAlarmAudio.current.currentTime = 0;
         
@@ -300,10 +299,14 @@ export default function Admin() {
     } catch (error) { toast.error("Network error. Please try again."); }
   };
 
+  // FIX: Read names securely using `order.customer?.name` instead of `order.customer_name`
   const printExistingOrder = (order) => {
     let parsedItems = [];
     try {
-      parsedItems = JSON.parse(order.items_json || '[]');
+      let raw = order.items_json;
+      if (typeof raw === 'string') raw = JSON.parse(raw);
+      if (typeof raw === 'string') raw = JSON.parse(raw); 
+      parsedItems = Array.isArray(raw) ? raw : [];
     } catch (e) {
       toast.error("Corrupted order data, cannot print.");
       return;
@@ -311,7 +314,7 @@ export default function Admin() {
     
     setPrintData({
       title: order.order_type === 'Hotel' ? `Room ${order.hotel_tab?.room_number} Folio` : 'Walk-in Bill',
-      subtitle: `Guest: ${order.order_type === 'Hotel' ? order.hotel_tab?.guest_name : order.customer_name}`,
+      subtitle: `Guest: ${order.order_type === 'Hotel' ? order.hotel_tab?.guest_name : order.customer?.name}`,
       items: parsedItems,
       total: parseFloat(order.total_amount)
     });
@@ -327,11 +330,18 @@ export default function Admin() {
 
     tabOrders.forEach(o => {
       grandTotal += parseFloat(o.total_amount);
-      const items = JSON.parse(o.items_json || '[]');
-      items.forEach(item => {
-        if (combinedItems[item.name]) combinedItems[item.name].quantity += (item.quantity || 1);
-        else combinedItems[item.name] = { ...item, quantity: item.quantity || 1 };
-      });
+      try {
+        let items = o.items_json;
+        if (typeof items === 'string') items = JSON.parse(items);
+        if (typeof items === 'string') items = JSON.parse(items);
+        
+        if (Array.isArray(items)) {
+          items.forEach(item => {
+            if (combinedItems[item.name]) combinedItems[item.name].quantity += (item.quantity || 1);
+            else combinedItems[item.name] = { ...item, quantity: item.quantity || 1 };
+          });
+        }
+      } catch(e) { console.error(e) }
     });
 
     setPrintData({ title: `Room ${room} Folio`, subtitle: `Guest: ${tab.guest_name}`, items: Object.values(combinedItems), total: grandTotal });
@@ -350,23 +360,36 @@ export default function Admin() {
   }[s] || 'bg-gray-100 text-gray-700');
 
   const hotelRooms = ['101', '102', '103', '104', '105', '106', '107', '108'];
-  const filteredOrders = data.orders.filter(o => (o.customer_name || o.hotel_tab?.guest_name || '').toLowerCase().includes(orderSearch.toLowerCase()));
-  const validOrders = data.orders.filter(o => o.status === 'Paid & Preparing' || o.status === 'Completed' || o.status === 'Accepted');
-  const totalRevenue = validOrders.reduce((sum, order) => sum + parseFloat(order.total_amount), 0);
+  
+  // FIX: Filter by reading standard customer name from the nested object
+  const filteredOrders = data.orders.filter(o => (o.customer?.name || o.hotel_tab?.guest_name || '').toLowerCase().includes(orderSearch.toLowerCase()));
+  
+  const validOrders = data.orders.filter(o => o.status !== 'Rejected');
+  const totalRevenue = validOrders.reduce((sum, order) => sum + parseFloat(order.total_amount || 0), 0);
   const itemCounts = {};
   
   validOrders.forEach(order => {
     try {
-      const items = JSON.parse(order.items_json);
-      items.forEach(item => { itemCounts[item.name] = (itemCounts[item.name] || 0) + (item.quantity || 1); });
-    } catch (e) {}
+      let items = order.items_json;
+      if (typeof items === 'string') items = JSON.parse(items);
+      if (typeof items === 'string') items = JSON.parse(items); 
+      
+      if (Array.isArray(items)) {
+        items.forEach(item => { 
+          if (item.name) {
+            itemCounts[item.name] = (itemCounts[item.name] || 0) + (item.quantity || 1); 
+          }
+        });
+      }
+    } catch (e) {
+      console.error("Analytics parsing error:", e);
+    }
   });
 
   const popularItemsData = Object.keys(itemCounts).map(key => ({ name: key.substring(0, 12) + '...', sales: itemCounts[key] })).sort((a, b) => b.sales - a.sales).slice(0, 6);
 
   return (
     <>
-      {/* FIX 3: Removed 'fixed inset-0' to allow multi-page printing to scroll naturally */}
       <div className="hidden print:block bg-white text-black font-mono w-full min-h-screen p-8">
         {printData && !printQRs && (
           <div className="max-w-md mx-auto">
@@ -393,9 +416,9 @@ export default function Admin() {
           <div className="max-w-4xl mx-auto font-sans">
             <h2 className="text-center font-bold text-3xl mb-8 tracking-widest border-b-4 border-black pb-4">ROOM SERVICE SCAN CODES</h2>
             <div className="grid grid-cols-2 gap-8">
-              {hotelRooms.map(room => {
+              {hotelRooms.map((room) => {
                  const roomUrl = `${window.location.origin}/?room=${room}`;
-                 const qrApi = `https://chart.googleapis.com/chart?chs=400x400&cht=qr&chl=${encodeURIComponent(roomUrl)}&choe=UTF-8`;
+                 const qrApi = `https://quickchart.io/qr?text=${encodeURIComponent(roomUrl)}&margin=1&size=400`;
                  return (
                    <div key={room} className="border-4 border-black p-6 flex flex-col items-center justify-center rounded-3xl text-center break-inside-avoid shadow-sm">
                      <h3 className="font-black text-5xl mb-6 text-black">ROOM {room}</h3>
@@ -446,7 +469,6 @@ export default function Admin() {
         <div className="flex-1 overflow-y-auto p-8 lg:p-12 relative">
           <div className="absolute top-0 right-0 w-96 h-96 bg-gold-200/20 rounded-full blur-3xl pointer-events-none" />
           
-          {/* ... (Analytics & Live Orders exactly the same, omitted for brevity) ... */}
           {activeTab === 'analytics' && (
             <div className="relative z-10 animate-fade-in">
               <div className="mb-8">
@@ -464,7 +486,7 @@ export default function Admin() {
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-cream-200 flex items-center gap-4">
                   <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center"><TrendingUp className="w-6 h-6" /></div>
                   <div>
-                    <p className="text-sm font-medium text-brown-500 uppercase tracking-wider mb-1">Completed Orders</p>
+                    <p className="text-sm font-medium text-brown-500 uppercase tracking-wider mb-1">Active / Complete Orders</p>
                     <p className="text-2xl font-bold text-brown-900">{validOrders.length}</p>
                   </div>
                 </div>
@@ -474,6 +496,19 @@ export default function Admin() {
                     <p className="text-sm font-medium text-brown-500 uppercase tracking-wider mb-1">Pending Orders</p>
                     <p className="text-2xl font-bold text-brown-900">{pending.o}</p>
                   </div>
+                </div>
+              </div>
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-cream-200">
+                <h3 className="font-serif text-lg font-bold text-brown-900 mb-6">Top Selling Items</h3>
+                <div className="w-full h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={popularItemsData}>
+                      <XAxis dataKey="name" tick={{fill: '#78716c', fontSize: 12}} />
+                      <YAxis tick={{fill: '#78716c', fontSize: 12}} />
+                      <Tooltip cursor={{fill: '#fefce8'}} contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
+                      <Bar dataKey="sales" fill="#d97706" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
             </div>
@@ -506,7 +541,14 @@ export default function Admin() {
                     {filteredOrders.length === 0 ? (
                       <tr><td colSpan="6" className="p-8 text-center text-brown-400">No active orders found.</td></tr>
                     ) : filteredOrders.map(order => {
-                      const items = JSON.parse(order.items_json || '[]');
+                      let items = [];
+                      try {
+                        let raw = order.items_json;
+                        if (typeof raw === 'string') raw = JSON.parse(raw);
+                        if (typeof raw === 'string') raw = JSON.parse(raw);
+                        items = Array.isArray(raw) ? raw : [];
+                      } catch (e) {}
+
                       const isHotel = order.order_type === 'Hotel';
                       return (
                         <tr key={order.id} className={`hover:bg-cream-50 transition-colors ${order.status === 'Pending' ? 'bg-amber-50/50' : ''}`}>
@@ -519,8 +561,9 @@ export default function Admin() {
                             )}
                           </td>
                           <td className="p-5">
-                            <p className="font-medium text-brown-900">{isHotel ? order.hotel_tab?.guest_name : order.customer_name}</p>
-                            {!isHotel && <p className="text-xs text-brown-500 mt-0.5">{order.customer_phone === '0000000000' ? 'POS User' : order.customer_phone}</p>}
+                            {/* FIX: Correctly reading nested customer name for Walk-in orders */}
+                            <p className="font-medium text-brown-900">{isHotel ? order.hotel_tab?.guest_name : order.customer?.name}</p>
+                            {!isHotel && <p className="text-xs text-brown-500 mt-0.5">{order.customer?.phone === '0000000000' ? 'POS System' : order.customer?.phone}</p>}
                           </td>
                           <td className="p-5">
                             <div className="max-h-24 overflow-y-auto pr-2 text-sm text-brown-700 space-y-1">
@@ -563,7 +606,6 @@ export default function Admin() {
                 </div>
               </div>
 
-              {/* FIX 4: Converted the side panel to a true <form> with strict HTML5 pattern matching */}
               <form onSubmit={handlePOSPrint} className="w-full lg:w-96 bg-white rounded-2xl shadow-lg border border-cream-200 p-6 flex flex-col h-full sticky top-0">
                 <h3 className="font-serif text-xl font-bold text-brown-900 mb-4 border-b border-cream-200 pb-4">Current Bill</h3>
                 
@@ -596,7 +638,6 @@ export default function Admin() {
             </div>
           )}
 
-          {/* ... (The Menu, Hotel, Bookings, Inbox, and Reviews tabs remained unchanged) ... */}
           {activeTab === 'menu' && (
             <div className="relative z-10 animate-fade-in">
                <div className="flex justify-between items-center mb-8">
@@ -697,7 +738,7 @@ export default function Admin() {
                <div className="flex justify-between items-center mb-8">
                 <div><p className="text-gold-600 text-sm font-medium uppercase tracking-[0.2em] mb-1">Front Desk</p><h2 className="font-serif text-3xl font-bold">Automated Room Management</h2></div>
                 <div className="flex gap-3">
-                  <button onClick={() => { setPrintQRs(true); setTimeout(() => { window.print(); }, 500); }} className="flex items-center gap-2 px-4 py-2.5 bg-brown-900 text-gold-400 rounded-xl text-sm font-bold shadow-md hover:bg-brown-800 transition-colors"><QrCode className="w-5 h-5"/> Print Room QRs</button>
+                  <button onClick={() => { setPrintQRs(true); setTimeout(() => { window.print(); setPrintQRs(false); }, 1000); }} className="flex items-center gap-2 px-4 py-2.5 bg-brown-900 text-gold-400 rounded-xl text-sm font-bold shadow-md hover:bg-brown-800 transition-colors"><QrCode className="w-5 h-5"/> Print Room QRs</button>
                   <button onClick={loadData} className="p-2.5 bg-white border border-cream-300 rounded-xl text-brown-600 hover:text-gold-600 shadow-sm"><RefreshCw className="w-5 h-5" /></button>
                 </div>
               </div>

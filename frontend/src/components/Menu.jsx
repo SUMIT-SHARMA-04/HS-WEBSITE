@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useCart } from "@/context/CartContext";
-import { Loader, Sparkles } from 'lucide-react';
+import { Loader } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -20,20 +20,16 @@ export default function Menu() {
           const menuArray = Array.isArray(rawData) ? rawData : rawData.results || [];
           
           const groupedData = menuArray.reduce((acc, item) => {
+            // STRICT FILTER: Completely hide the "Combos & Offers" category from the standard menu
+            if (item.category === "Combos & Offers") return acc;
+            
             if (!acc[item.category]) acc[item.category] = [];
             acc[item.category].push(item);
             return acc;
           }, {});
 
-          const sortedData = {};
-          if (groupedData["Combos & Offers"]) {
-            sortedData["Combos & Offers"] = groupedData["Combos & Offers"];
-            delete groupedData["Combos & Offers"];
-          }
-          Object.assign(sortedData, groupedData);
-
-          setMenuData(sortedData);
-          const categories = Object.keys(sortedData);
+          setMenuData(groupedData);
+          const categories = Object.keys(groupedData);
           if (categories.length > 0) setActiveCategory(categories[0]);
         }
       } catch (error) {
@@ -94,7 +90,6 @@ export default function Menu() {
                     activeCategory === cat ? 'bg-brown-900 text-gold-400 shadow-md' : 'bg-white text-brown-600 border border-cream-300 hover:border-brown-900'
                   }`}
                 >
-                  {cat === "Combos & Offers" && <Sparkles className="w-4 h-4" />}
                   {cat}
                 </button>
               ))}
@@ -110,9 +105,6 @@ export default function Menu() {
                 >
                   <div className="relative w-full h-28 md:h-52 shrink-0 overflow-hidden">
                     <img src={item.img} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
-                    {item.category === "Combos & Offers" && item.is_available && (
-                      <span className="absolute top-2 left-2 bg-red-600 text-white text-[9px] md:text-[10px] font-bold px-1.5 md:px-2 py-1 rounded-md uppercase shadow-sm">Offer</span>
-                    )}
                     {!item.is_available && (
                       <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                         <span className="bg-red-600 text-white font-bold px-3 py-1 rounded-full text-xs uppercase tracking-wider shadow-lg">Sold Out</span>

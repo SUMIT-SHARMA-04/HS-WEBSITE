@@ -95,7 +95,11 @@ class CheckoutView(APIView):
             
         calculated_total = 0
         for item in items:
-            menu_item = MenuItem.objects.filter(id=item.get('id')).first()
+            item_id = item.get('id')
+            if item_id:
+                menu_item = MenuItem.objects.filter(id=item_id).first()
+            else:
+                menu_item = MenuItem.objects.filter(name=item.get('name')).first()
             
             if not menu_item:
                 return Response({"error": f"Item '{item.get('name')}' not found on the menu."}, status=status.HTTP_400_BAD_REQUEST)
@@ -124,20 +128,20 @@ class CheckoutView(APIView):
             guest_name = data.get('guest_name', '').strip()
             guest_phone = data.get('guest_phone', '').strip()
             
-            # FIX: Updated regex to allow hyphens and dots in names
             if len(guest_name) < 3 or not re.match(r'^[A-Za-z\s\-\.]+$', guest_name):
                 return Response({"error": "Please provide a valid guest name (letters, spaces, hyphens)."}, status=status.HTTP_400_BAD_REQUEST)
             
-            # Note: Hotel guests might not have a phone number depending on your front desk flow, but if they do, validate it.
-            if guest_phone and not re.match(r'^[6-9]\d{9}$', guest_phone):
-                return Response({"error": "Please provide a valid 10-digit mobile number."}, status=status.HTTP_400_BAD_REQUEST)
+            # STRICT PHONE VALIDATION: Guest must provide phone number for room verification
+            if not guest_phone or not re.match(r'^[6-9]\d{9}$', guest_phone):
+                return Response({"error": "Please provide a valid 10-digit mobile number for room verification."}, status=status.HTTP_400_BAD_REQUEST)
 
             active_tab, created = HotelTab.objects.get_or_create(
                 room_number=room_number, is_active=True, defaults={'guest_name': guest_name, 'guest_phone': guest_phone}
             )
 
+            # STRICT TAB VERIFICATION
             if not created and (active_tab.guest_name.lower() != guest_name.lower() or active_tab.guest_phone != guest_phone):
-                return Response({"error": "Verification failed. Details do not match."}, status=status.HTTP_403_FORBIDDEN)
+                return Response({"error": "Verification failed. Name and Phone do not match the registered room folio."}, status=status.HTTP_403_FORBIDDEN)
 
             bill = Bill.objects.create(hotel_tab=active_tab, order_type='Hotel', items_json=data.get('items_json'), total_amount=true_total_amount, status='Pending', idempotency_key=idempotency_key)
             Contact.objects.create(name=f"Room {room_number} ({guest_name})", email="hotel@highspirits.local", message=f"Room service order #{bill.id} placed.")
@@ -151,8 +155,6 @@ class CheckoutView(APIView):
                 return Response({"error": "You already have a pending order."}, status=status.HTTP_429_TOO_MANY_REQUESTS)
 
             customer_name = data.get('customer_name', '').strip()
-            
-            # FIX: Updated regex to allow hyphens (like "Walk-in Customer")
             if len(customer_name) < 3 or not re.match(r'^[A-Za-z\s\-\.]+$', customer_name):
                 return Response({"error": "Please provide a valid name (letters, spaces, hyphens)."}, status=status.HTTP_400_BAD_REQUEST)
             

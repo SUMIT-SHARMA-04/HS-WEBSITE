@@ -5,9 +5,9 @@ import toast from 'react-hot-toast';
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const info = [
-  { icon: MapPin, label: 'Location', lines: ['C-Scheme', 'Jaipur, Rajasthan 302001'] },
+  { icon: MapPin, label: 'Location', lines: [['14 no, Out Side of Surya Hotel Service Line Road, Bypass, Sangam Colony, Jaipur, Rajasthan 302013']] },
   { icon: Phone, label: 'Phone', lines: ['+91 9182074513'] },
-  { icon: Mail, label: 'Email', lines: ['hello@highspiritscafe.com'] },
+  { icon: Mail, label: 'Email', lines: ['highspiritscafe99@gmail.com'] },
   { icon: Clock, label: 'Hours', lines: ['Mon – Sun: 9am – 10pm'] }, // FIX: Updated hours
 ];
 
@@ -79,7 +79,7 @@ export default function Contact() {
             </div>
 
             <a 
-              href="https://www.google.com/maps/dir/?api=1&destination=C-Scheme,+Jaipur,+Rajasthan" 
+              href="https://maps.app.goo.gl/eEV6LvXyu6XJMEex5" 
               target="_blank" rel="noopener noreferrer"
               className="mt-10 h-52 bg-brown-100 rounded-2xl overflow-hidden relative block group cursor-pointer border-2 border-transparent hover:border-gold-400 transition-all duration-300 shadow-md hover:shadow-xl"
             >
@@ -88,9 +88,9 @@ export default function Contact() {
                 <div className="bg-white/90 backdrop-blur-sm rounded-xl px-5 py-3 text-center shadow-md group-hover:bg-gold-50 transition-colors">
                   <MapPin className="w-5 h-5 text-gold-700 mx-auto mb-1" />
                   <p className="font-serif font-semibold text-brown-900 text-sm flex items-center gap-2 justify-center">
-                    C-Scheme, Jaipur <ExternalLink className="w-3 h-3 text-brown-400" />
+                    HS Cafe & Restaurant <ExternalLink className="w-3 h-3 text-brown-400" />
                   </p>
-                  <p className="text-brown-500 text-xs">Rajasthan 302001</p>
+                  <p className="text-brown-500 text-xs">Rajasthan 302013</p>
                 </div>
               </div>
             </a>

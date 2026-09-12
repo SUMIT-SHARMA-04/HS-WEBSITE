@@ -1,45 +1,38 @@
 import { useState, useEffect } from 'react';
-import { Tag, Sparkles, Gift, Users, ArrowRight } from 'lucide-react';
+import { Tag, Sparkles, Loader, ShoppingBag } from 'lucide-react';
+import { useCart } from '@/context/CartContext';
 
-// UPDATED: Changed currency to ₹ and updated values
-const combos = [
-  {
-    icon: Sparkles,
-    badge: 'Weekday Special',
-    title: 'Two-Course Lunch',
-    desc: 'A starter and main from our seasonal lunch menu, served Tuesday through Thursday.',
-    price: '₹499',
-    originalPrice: '₹699',
-    note: 'Available 12pm – 2:30pm',
-    image: 'https://images.pexels.com/photos/35160887/pexels-photo-35160887.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
-    accent: 'from-cream-200 to-cream-100',
-  },
-  {
-    icon: Users,
-    badge: 'Group Dining',
-    title: 'Family Feast',
-    desc: 'A sharing-style menu for groups of six or more — five courses designed for the whole table.',
-    price: '₹1499',
-    originalPrice: '₹1999',
-    note: 'Min. 6 guests · advance booking',
-    image: 'https://images.pexels.com/photos/6954474/pexels-photo-6954474.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
-    accent: 'from-brown-100 to-cream-100',
-  },
-  {
-    icon: Gift,
-    badge: 'Limited Time',
-    title: 'Sunday Brunch',
-    desc: 'Bottomless beverages, a live carving station, and our full pastry counter — every Sunday.',
-    price: '₹899',
-    originalPrice: '₹1199',
-    note: '11am – 3pm · walk-ins welcome',
-    image: 'https://images.pexels.com/photos/29086310/pexels-photo-29086310.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
-    accent: 'from-cream-200 to-brown-100',
-  },
-];
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export default function Offers() {
+  const [combos, setCombos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const { addToCart } = useCart();
+  const [animatingBtn, setAnimatingBtn] = useState(null);
+
   useEffect(() => {
+    const fetchCombos = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/menu/`);
+        if (response.ok) {
+          const rawData = await response.json();
+          const menuArray = Array.isArray(rawData) ? rawData : rawData.results || [];
+          
+          // Filters backend data specifically for active Combos
+          const activeCombos = menuArray.filter(item => item.category === "Combos & Offers" && item.is_available);
+          setCombos(activeCombos);
+        }
+      } catch (error) {
+        console.error("Failed to load combos", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCombos();
+  }, []);
+
+  useEffect(() => {
+    if (loading) return;
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -54,10 +47,18 @@ export default function Offers() {
     const elements = document.querySelectorAll('[data-reveal]');
     elements.forEach((el) => observer.observe(el));
     return () => observer.disconnect();
-  }, []);
+  }, [loading, combos]);
+
+  const handleAddToCart = (combo) => {
+    addToCart(combo);
+    setAnimatingBtn(combo.id);
+    setTimeout(() => setAnimatingBtn(null), 1000);
+  };
+
+  // Completely hides the section if you have no active combos in the database
+  if (!loading && combos.length === 0) return null;
 
   return (
-    // UPDATED: ID changed to combos to match the new Navbar link
     <section id="combos" className="py-24 bg-gradient-to-b from-cream-100 to-cream-200/60 relative overflow-hidden">
       <div className="absolute top-20 right-10 w-72 h-72 bg-brown-200/30 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-10 left-10 w-60 h-60 bg-cream-400/30 rounded-full blur-3xl pointer-events-none" />
@@ -78,76 +79,75 @@ export default function Offers() {
           </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-8">
-          {combos.map((combo, i) => {
-            const Icon = combo.icon;
-            return (
-              <div
-                key={combo.title}
-                data-reveal
-                style={{ transitionDelay: `${i * 120}ms` }}
-                className="group bg-white rounded-3xl overflow-hidden shadow-md hover:shadow-2xl transition-all duration-500 hover:-translate-y-2"
-              >
-                <div className="relative h-56 overflow-hidden">
-                  <img
-                    src={combo.image}
-                    alt={combo.title}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-brown-900/60 to-transparent" />
-                  <span className="absolute top-4 left-4 bg-gradient-to-r from-gold-400 to-gold-600 text-brown-950 text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wide shadow-md">
-                    {combo.badge}
-                  </span>
-                  <div className="absolute bottom-4 left-4 w-10 h-10 bg-white/95 rounded-full flex items-center justify-center shadow-lg">
-                    <Icon className="w-5 h-5 text-gold-700" />
-                  </div>
-                </div>
+        {loading ? (
+          <div className="flex justify-center py-12"><Loader className="w-8 h-8 animate-spin text-brown-400" /></div>
+        ) : (
+          <div className="grid md:grid-cols-3 gap-8">
+            {combos.map((combo, i) => {
+              // Calculates a display "original price" (+25%) to visually show savings
+              const originalPrice = Math.round(parseFloat(combo.price) * 1.25);
+              const isAnimating = animatingBtn === combo.id;
 
-                <div className="p-7">
-                  <h3 className="font-serif text-xl font-semibold text-brown-900 mb-2">
-                    {combo.title}
-                  </h3>
-                  <p className="text-brown-500 text-sm leading-relaxed mb-5">
-                    {combo.desc}
-                  </p>
-
-                  <div className="flex items-end justify-between mb-5">
-                    <div className="flex items-baseline gap-2">
-                      <span className="font-serif text-3xl font-bold text-gold-700">
-                        {combo.price}
-                      </span>
-                      <span className="text-brown-400 line-through text-sm">
-                        {combo.originalPrice}
-                      </span>
-                      <span className="bg-green-100 text-green-700 text-xs font-semibold px-2 py-0.5 rounded-full ml-1">
-                        Save{' '}
-                        {Math.round(
-                          (1 -
-                            parseInt(combo.price.slice(1), 10) /
-                              parseInt(combo.originalPrice.slice(1), 10)) *
-                            100
-                        )}
-                        %
-                      </span>
+              return (
+                <div
+                  key={combo.id}
+                  data-reveal
+                  style={{ transitionDelay: `${i * 120}ms` }}
+                  className="group bg-white rounded-3xl overflow-hidden shadow-md hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 flex flex-col"
+                >
+                  <div className="relative h-56 overflow-hidden shrink-0">
+                    <img
+                      src={combo.img}
+                      alt={combo.name}
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-brown-900/60 to-transparent" />
+                    <span className="absolute top-4 left-4 bg-gradient-to-r from-gold-400 to-gold-600 text-brown-950 text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wide shadow-md">
+                      Special Offer
+                    </span>
+                    <div className="absolute bottom-4 left-4 w-10 h-10 bg-white/95 rounded-full flex items-center justify-center shadow-lg">
+                      <Sparkles className="w-5 h-5 text-gold-700" />
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between pt-4 border-t border-cream-200">
-                    <p className="text-brown-400 text-xs">{combo.note}</p>
-                    <a
-                      href="#book"
-                      className="flex items-center gap-1.5 text-gold-700 text-sm font-medium hover:gap-3 transition-all"
-                    >
-                      Reserve
-                      <ArrowRight className="w-4 h-4" />
-                    </a>
+                  <div className="p-7 flex flex-col flex-grow">
+                    <h3 className="font-serif text-xl font-semibold text-brown-900 mb-2">
+                      {combo.name}
+                    </h3>
+                    <p className="text-brown-500 text-sm leading-relaxed mb-5 flex-grow">
+                      A specially curated combination designed to give you the best flavors at a great value.
+                    </p>
+
+                    <div className="flex items-end justify-between mb-6">
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-serif text-3xl font-bold text-gold-700">
+                          ₹{combo.price}
+                        </span>
+                        <span className="text-brown-400 line-through text-sm">
+                          ₹{originalPrice}
+                        </span>
+                        <span className="bg-green-100 text-green-700 text-xs font-semibold px-2 py-0.5 rounded-full ml-1">
+                          Save 20%
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="pt-5 border-t border-cream-200">
+                      <button
+                        onClick={() => handleAddToCart(combo)}
+                        className={`w-full py-3.5 rounded-xl text-sm font-bold transition-all duration-300 flex items-center justify-center gap-2 ${
+                          isAnimating ? 'bg-green-600 text-white scale-95' : 'btn-gold shadow-md hover:shadow-lg'
+                        }`}
+                      >
+                        {isAnimating ? 'Added to Cart!' : <><ShoppingBag className="w-4 h-4" /> Add Combo to Cart</>}
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-        {/* The Event Planning block was removed from here so it can be its own component */}
+              );
+            })}
+          </div>
+        )}
       </div>
     </section>
   );
