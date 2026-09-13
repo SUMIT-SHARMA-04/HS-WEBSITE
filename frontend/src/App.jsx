@@ -8,9 +8,9 @@ import Navbar from './components/Navbar';
 import CartDrawer from './components/CartDrawer';
 
 // --- PAGES ---
-import Home from './pages/Home';
-import Admin from './pages/Admin';
-import AdminLogin from './pages/AdminLogin';
+import Home from './Pages/Home';
+import Admin from './Pages/Admin';
+import AdminLogin from './Pages/AdminLogin';
 
 function MainLayout() {
   const urlParams = new URLSearchParams(window.location.search);
