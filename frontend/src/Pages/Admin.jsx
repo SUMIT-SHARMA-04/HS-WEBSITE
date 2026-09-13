@@ -39,9 +39,6 @@ export default function Admin() {
   const audioEnabledRef = useRef(audioEnabled);
   useEffect(() => { audioEnabledRef.current = audioEnabled; }, [audioEnabled]);
 
-  const singleAlertAudio = useRef(new Audio('https://assets.mixkit.co/active_storage/sfx/1110/1110-preview.mp3')); 
-  const continuousAlarmAudio = useRef(new Audio('https://assets.mixkit.co/active_storage/sfx/1114/1114-preview.mp3'));
-
   const pending = {
     o: data.orders.filter(x => x.status === 'Pending').length,
     b: data.bookings.filter(x => x.status === 'Pending').length,
@@ -58,24 +55,47 @@ export default function Admin() {
     return () => window.removeEventListener('afterprint', handleAfterPrint);
   }, []);
 
-  // Continuous looping audio enabled
+  // SMART CONTINUOUS VOICE ALARM
   useEffect(() => {
-    continuousAlarmAudio.current.loop = true;
-    const hasUrgentPending = pending.o > 0 || pending.b > 0;
+    let intervalId;
+    const hasPending = pending.o > 0 || pending.b > 0 || pending.m > 0 || pending.r > 0;
 
-    if (audioEnabled && hasUrgentPending) {
-      const playPromise = continuousAlarmAudio.current.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(e => {
-          console.warn("Alarm blocked by browser auto-play policy.", e);
-        });
-      }
+    if (audioEnabled && hasPending && 'speechSynthesis' in window) {
+      const announce = () => {
+        // Don't speak if it is currently still speaking a previous sentence
+        if (window.speechSynthesis.speaking) return; 
+
+        let msg = "";
+        if (pending.o > 0) msg = "New order received.";
+        else if (pending.b > 0) msg = "New table reservation request.";
+        else if (pending.m > 0) msg = "New customer message.";
+        else if (pending.r > 0) msg = "New review pending.";
+
+        if (msg) {
+          const utterance = new SpeechSynthesisUtterance(msg);
+          utterance.rate = 0.85; // Slightly slower for a calmer voice
+          utterance.pitch = 1.05; // Slightly higher pitch to sound friendly
+          window.speechSynthesis.speak(utterance);
+        }
+      };
+
+      // Speak immediately when a new item is detected
+      announce(); 
+      // Then repeat the voice continuously every 5 seconds until accepted
+      intervalId = setInterval(announce, 5000); 
     } else {
-      continuousAlarmAudio.current.pause();
-      continuousAlarmAudio.current.currentTime = 0;
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel(); // Stop talking immediately if cleared
+      }
     }
-    return () => { continuousAlarmAudio.current.pause(); };
-  }, [pending.o, pending.b, audioEnabled]);
+
+    return () => {
+      clearInterval(intervalId);
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, [pending.o, pending.b, pending.m, pending.r, audioEnabled]);
 
   const secureApiCall = async (url, options = {}) => {
     let token = localStorage.getItem('admin_access_token');
@@ -108,23 +128,15 @@ export default function Admin() {
     setAudioEnabled(newState);
     localStorage.setItem('hsc_admin_audio', newState);
     
-    if (newState) {
-      // Play and immediately pause both audio files to securely unlock them in modern browsers
-      singleAlertAudio.current.play().then(() => {
-        singleAlertAudio.current.pause();
-        singleAlertAudio.current.currentTime = 0;
-      }).catch(e => console.log("Single audio unlock failed", e));
-      
-      continuousAlarmAudio.current.play().then(() => {
-        continuousAlarmAudio.current.pause();
-        continuousAlarmAudio.current.currentTime = 0;
-      }).catch(e => console.log("Continuous audio unlock failed", e));
-      
-      toast.success("Audio Notifications Enabled!");
+    if (newState && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance("Voice alerts enabled.");
+      u.rate = 0.9;
+      window.speechSynthesis.speak(u);
+      toast.success("Voice Notifications Enabled!");
     } else {
-      continuousAlarmAudio.current.pause();
-      continuousAlarmAudio.current.currentTime = 0;
-      toast.success("Audio Notifications Muted");
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      toast.success("Voice Notifications Muted");
     }
   };
 
@@ -136,12 +148,7 @@ export default function Admin() {
       review: { text: "New review submitted", title: "New Review Pending" }
     };
     
-    if (audioEnabledRef.current && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(alerts[type]?.text || "New Notification");
-      u.rate = 0.9;
-      window.speechSynthesis.speak(u);
-    }
+    // We only need desktop notifications here, voice is handled by the useEffect loop
     if ('Notification' in window && Notification.permission === 'granted') {
       new Notification(alerts[type]?.title, { body: alerts[type]?.text, icon: '/vite.svg' });
     }
@@ -174,27 +181,20 @@ export default function Admin() {
       if (!token) return;
       
       const wsUrl = `${WS_BASE}/ws/admin-notifications/?token=${token}`;
-      console.log("Connecting to WebSocket:", wsUrl);
       
       ws = new WebSocket(wsUrl);
       
-      ws.onopen = () => {
-        console.log("✅ WebSocket Connected Successfully!");
-      };
+      ws.onopen = () => { console.log("✅ WebSocket Connected Successfully!"); };
       
       ws.onmessage = (event) => {
         const payload = JSON.parse(event.data);
-        console.log("New WS event:", payload);
         alertOwner(payload.event);
         loadData();
       };
 
-      ws.onerror = (error) => {
-        console.error("❌ WebSocket Error:", error);
-      };
+      ws.onerror = (error) => { console.error("❌ WebSocket Error:", error); };
 
       ws.onclose = () => { 
-        console.log("⚠️ WebSocket Disconnected. Retrying in 3s...");
         reconnectTimer = setTimeout(connectWs, 3000); 
       };
     };
@@ -310,9 +310,6 @@ export default function Admin() {
           items: posItems, 
           total: posTotal 
         });
-        
-        continuousAlarmAudio.current.pause();
-        continuousAlarmAudio.current.currentTime = 0;
         
         await loadData();
         
