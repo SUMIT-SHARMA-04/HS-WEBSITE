@@ -11,7 +11,9 @@ import {
 } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-const WS_BASE = API_BASE.replace(/^http/, 'ws');
+const wsProtocol = API_BASE.startsWith("https") ? "wss://" : "ws://";
+const wsHost = API_BASE.replace(/^https?:\/\//, "");
+const WS_BASE = `${wsProtocol}${wsHost}`;
 
 export default function Admin() {
   const navigate = useNavigate();
@@ -107,7 +109,17 @@ export default function Admin() {
     localStorage.setItem('hsc_admin_audio', newState);
     
     if (newState) {
-      singleAlertAudio.current.play().catch(e => console.log("Audio unlock failed", e));
+      // Play and immediately pause both audio files to securely unlock them in modern browsers
+      singleAlertAudio.current.play().then(() => {
+        singleAlertAudio.current.pause();
+        singleAlertAudio.current.currentTime = 0;
+      }).catch(e => console.log("Single audio unlock failed", e));
+      
+      continuousAlarmAudio.current.play().then(() => {
+        continuousAlarmAudio.current.pause();
+        continuousAlarmAudio.current.currentTime = 0;
+      }).catch(e => console.log("Continuous audio unlock failed", e));
+      
       toast.success("Audio Notifications Enabled!");
     } else {
       continuousAlarmAudio.current.pause();
@@ -160,13 +172,31 @@ export default function Admin() {
     const connectWs = () => {
       const token = localStorage.getItem('admin_access_token');
       if (!token) return;
-      ws = new WebSocket(`${WS_BASE}/ws/admin-notifications/?token=${token}`);
+      
+      const wsUrl = `${WS_BASE}/ws/admin-notifications/?token=${token}`;
+      console.log("Connecting to WebSocket:", wsUrl);
+      
+      ws = new WebSocket(wsUrl);
+      
+      ws.onopen = () => {
+        console.log("✅ WebSocket Connected Successfully!");
+      };
+      
       ws.onmessage = (event) => {
         const payload = JSON.parse(event.data);
+        console.log("New WS event:", payload);
         alertOwner(payload.event);
         loadData();
       };
-      ws.onclose = () => { reconnectTimer = setTimeout(connectWs, 3000); };
+
+      ws.onerror = (error) => {
+        console.error("❌ WebSocket Error:", error);
+      };
+
+      ws.onclose = () => { 
+        console.log("⚠️ WebSocket Disconnected. Retrying in 3s...");
+        reconnectTimer = setTimeout(connectWs, 3000); 
+      };
     };
 
     connectWs();
@@ -299,7 +329,6 @@ export default function Admin() {
     } catch (error) { toast.error("Network error. Please try again."); }
   };
 
-  // FIX: Read names securely using `order.customer?.name` instead of `order.customer_name`
   const printExistingOrder = (order) => {
     let parsedItems = [];
     try {
@@ -361,7 +390,6 @@ export default function Admin() {
 
   const hotelRooms = ['101', '102', '103', '104', '105', '106', '107', '108'];
   
-  // FIX: Filter by reading standard customer name from the nested object
   const filteredOrders = data.orders.filter(o => (o.customer?.name || o.hotel_tab?.guest_name || '').toLowerCase().includes(orderSearch.toLowerCase()));
   
   const validOrders = data.orders.filter(o => o.status !== 'Rejected');
@@ -561,7 +589,6 @@ export default function Admin() {
                             )}
                           </td>
                           <td className="p-5">
-                            {/* FIX: Correctly reading nested customer name for Walk-in orders */}
                             <p className="font-medium text-brown-900">{isHotel ? order.hotel_tab?.guest_name : order.customer?.name}</p>
                             {!isHotel && <p className="text-xs text-brown-500 mt-0.5">{order.customer?.phone === '0000000000' ? 'POS System' : order.customer?.phone}</p>}
                           </td>
