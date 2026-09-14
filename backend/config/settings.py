@@ -12,7 +12,7 @@ DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
 
 # Proper wildcard handling for django-cors-headers
-cors_env = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173')
+cors_env = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:5173')
 if cors_env == '*':
     CORS_ALLOW_ALL_ORIGINS = True
     CSRF_TRUSTED_ORIGINS = []
@@ -84,7 +84,16 @@ if redis_url:
         "default": {
             "BACKEND": "channels_redis.core.RedisChannelLayer",
             "CONFIG": {
-                "hosts": [redis_url],
+                "hosts": [
+                    {
+                        "address": redis_url,
+                        "kwargs": {
+                            # Keeps connection alive without triggering a crash during idle listening
+                            "socket_keepalive": True,
+                            "health_check_interval": 30
+                        }
+                    }
+                ],
             },
         }
     }
@@ -119,5 +128,5 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'your-restaurant-email@gmail.com')
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
