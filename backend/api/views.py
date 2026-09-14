@@ -4,7 +4,7 @@ import re
 import os
 import traceback
 from datetime import date
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.core.mail import send_mail
 from django.conf import settings
 from rest_framework import viewsets, status
@@ -24,16 +24,21 @@ logger = logging.getLogger(__name__)
 # EMAIL NOTIFICATION ENGINE (SYNCHRONOUS)
 # ==============================================================================
 def send_email_sync(subject, body, from_email, recipient_list):
+    if not from_email:
+        logger.error("Email Delivery Skipped: EMAIL_HOST_USER is not configured in environment.")
+        return
+        
     try:
-        send_mail(subject=subject, message=body, from_email=from_email, recipient_list=recipient_list, fail_silently=True)
+        send_mail(subject=subject, message=body, from_email=from_email, recipient_list=recipient_list, fail_silently=False)
+        logger.info(f"Email successfully sent to {recipient_list}")
     except Exception as e:
         logger.error(f"Email Delivery Failed: {e}")
 
 def notify_owner(event_type):
-    OWNER_EMAIL = os.environ.get('OWNER_EMAIL', 'your-restaurant-email@gmail.com')
+    OWNER_EMAIL = os.environ.get('OWNER_EMAIL', settings.EMAIL_HOST_USER)
     
     email_alerts = {
-        'order': {'subject': '🚨 ACTION REQUIRED: New Food Order', 'body': 'A new food order has just been placed.'},
+        'order': {'subject': '🚨 ACTION REQUIRED: New Food Order', 'body': 'A new food order has just been placed. Open the Admin Panel to review.'},
         'booking': {'subject': '📅 ACTION REQUIRED: New Table Reservation', 'body': 'A customer has requested a table reservation.'},
         'message': {'subject': '✉️ New Customer Message', 'body': 'You have received a new message via the website contact form.'},
         'review': {'subject': '⭐ New Review Pending Approval', 'body': 'A customer submitted a new review pending approval.'}
@@ -123,7 +128,14 @@ class CheckoutView(APIView):
             if not created and (active_tab.guest_name.lower() != guest_name.lower() or active_tab.guest_phone != guest_phone):
                 return Response({"error": "Verification failed. Name and Phone do not match the registered room folio."}, status=status.HTTP_403_FORBIDDEN)
 
-            bill = Bill.objects.create(hotel_tab=active_tab, order_type='Hotel', items_json=data.get('items_json'), total_amount=true_total_amount, status='Pending', idempotency_key=idempotency_key)
+            # RACE CONDITION FIX: Catch the IntegrityError if another thread beat us to the database
+            try:
+                with transaction.atomic():
+                    bill = Bill.objects.create(hotel_tab=active_tab, order_type='Hotel', items_json=data.get('items_json'), total_amount=true_total_amount, status='Pending', idempotency_key=idempotency_key)
+            except IntegrityError:
+                existing_bill = Bill.objects.get(idempotency_key=idempotency_key)
+                return Response({"message": "Order already processed", "order_id": existing_bill.id, "status": existing_bill.status}, status=status.HTTP_200_OK)
+
             Contact.objects.create(name=f"Room {room_number} ({guest_name})", email="hotel@highspirits.local", message=f"Room service order #{bill.id} placed.")
 
             trigger_admin_websocket('order')
@@ -142,7 +154,14 @@ class CheckoutView(APIView):
                 return Response({"error": "Please provide a valid 10-digit mobile number."}, status=status.HTTP_400_BAD_REQUEST)
 
             customer, _ = Customer.objects.get_or_create(phone=customer_phone, defaults={'name': customer_name})
-            bill = Bill.objects.create(customer=customer, order_type='Standard', items_json=data.get('items_json'), total_amount=true_total_amount, status='Pending', idempotency_key=idempotency_key)
+            
+            # RACE CONDITION FIX: Catch the IntegrityError if another thread beat us to the database
+            try:
+                with transaction.atomic():
+                    bill = Bill.objects.create(customer=customer, order_type='Standard', items_json=data.get('items_json'), total_amount=true_total_amount, status='Pending', idempotency_key=idempotency_key)
+            except IntegrityError:
+                existing_bill = Bill.objects.get(idempotency_key=idempotency_key)
+                return Response({"message": "Order already processed", "order_id": existing_bill.id, "status": existing_bill.status}, status=status.HTTP_200_OK)
             
             trigger_admin_websocket('order')
             return Response({"order_id": bill.id, "status": bill.status}, status=status.HTTP_201_CREATED)
