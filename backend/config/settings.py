@@ -87,11 +87,12 @@ if redis_url:
                 "hosts": [
                     {
                         "address": redis_url,
-                        "kwargs": {
-                            # Keeps connection alive without triggering a crash during idle listening
-                            "socket_keepalive": True,
-                            "health_check_interval": 30
-                        }
+                        # These must be siblings of "address", not nested under a "kwargs" key.
+                        # channels_redis pops "address" off this dict and spreads the rest
+                        # straight into ConnectionPool.from_url(address, **host), so a nested
+                        # "kwargs" key gets forwarded literally as a keyword arg named "kwargs".
+                        "socket_keepalive": True,
+                        "health_check_interval": 30,
                     }
                 ],
             },
