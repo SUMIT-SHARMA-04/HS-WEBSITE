@@ -3,8 +3,6 @@ import json
 import re
 import os
 import traceback
-import threading
-import requests
 from datetime import date
 from django.db import transaction
 from django.core.mail import send_mail
@@ -23,24 +21,13 @@ from .serializers import BillSerializer, MenuItemSerializer, BookingSerializer, 
 logger = logging.getLogger(__name__)
 
 # ==============================================================================
-# TELEGRAM & EMAIL NOTIFICATION ENGINE (ASYNCHRONOUS)
+# EMAIL NOTIFICATION ENGINE (SYNCHRONOUS)
 # ==============================================================================
-def send_email_async(subject, body, from_email, recipient_list):
+def send_email_sync(subject, body, from_email, recipient_list):
     try:
         send_mail(subject=subject, message=body, from_email=from_email, recipient_list=recipient_list, fail_silently=True)
     except Exception as e:
         logger.error(f"Email Delivery Failed: {e}")
-
-def send_telegram_async(text):
-    bot_token = os.environ.get('TELEGRAM_BOT_TOKEN')
-    chat_id = os.environ.get('TELEGRAM_CHAT_ID')
-    if not bot_token or not chat_id:
-        return
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    try:
-        requests.post(url, json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"}, timeout=5)
-    except Exception as e:
-        logger.error(f"Telegram Delivery Failed: {e}")
 
 def notify_owner(event_type):
     OWNER_EMAIL = os.environ.get('OWNER_EMAIL', 'your-restaurant-email@gmail.com')
@@ -52,18 +39,13 @@ def notify_owner(event_type):
         'review': {'subject': '⭐ New Review Pending Approval', 'body': 'A customer submitted a new review pending approval.'}
     }
     
-    telegram_alerts = {
-        'order': '🚨 <b>NEW ORDER RECEIVED</b>\nA customer has placed an order. Open the Admin Panel.',
-        'booking': '📅 <b>NEW RESERVATION</b>\nA new table booking is waiting for your approval.',
-        'message': '✉️ <b>NEW MESSAGE</b>\nYou have a new message in your Contact Inbox.',
-        'review': '⭐ <b>NEW REVIEW</b>\nA new customer review is pending approval.'
-    }
-    
     if event_type in email_alerts:
-        threading.Thread(target=send_email_async, args=(email_alerts[event_type]['subject'], email_alerts[event_type]['body'], settings.EMAIL_HOST_USER, [OWNER_EMAIL])).start()
-    
-    if event_type in telegram_alerts:
-        threading.Thread(target=send_telegram_async, args=(telegram_alerts[event_type],)).start()
+        send_email_sync(
+            email_alerts[event_type]['subject'], 
+            email_alerts[event_type]['body'], 
+            settings.EMAIL_HOST_USER, 
+            [OWNER_EMAIL]
+        )
 
 def trigger_admin_websocket(event_type):
     try:
@@ -131,7 +113,6 @@ class CheckoutView(APIView):
             if len(guest_name) < 3 or not re.match(r'^[A-Za-z\s\-\.]+$', guest_name):
                 return Response({"error": "Please provide a valid guest name (letters, spaces, hyphens)."}, status=status.HTTP_400_BAD_REQUEST)
             
-            # STRICT PHONE VALIDATION: Guest must provide phone number for room verification
             if not guest_phone or not re.match(r'^[6-9]\d{9}$', guest_phone):
                 return Response({"error": "Please provide a valid 10-digit mobile number for room verification."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -139,7 +120,6 @@ class CheckoutView(APIView):
                 room_number=room_number, is_active=True, defaults={'guest_name': guest_name, 'guest_phone': guest_phone}
             )
 
-            # STRICT TAB VERIFICATION
             if not created and (active_tab.guest_name.lower() != guest_name.lower() or active_tab.guest_phone != guest_phone):
                 return Response({"error": "Verification failed. Name and Phone do not match the registered room folio."}, status=status.HTTP_403_FORBIDDEN)
 

@@ -55,14 +55,12 @@ export default function Admin() {
     return () => window.removeEventListener('afterprint', handleAfterPrint);
   }, []);
 
-  // SMART CONTINUOUS VOICE ALARM
   useEffect(() => {
     let intervalId;
     const hasPending = pending.o > 0 || pending.b > 0 || pending.m > 0 || pending.r > 0;
 
     if (audioEnabled && hasPending && 'speechSynthesis' in window) {
       const announce = () => {
-        // Don't speak if it is currently still speaking a previous sentence
         if (window.speechSynthesis.speaking) return; 
 
         let msg = "";
@@ -73,19 +71,17 @@ export default function Admin() {
 
         if (msg) {
           const utterance = new SpeechSynthesisUtterance(msg);
-          utterance.rate = 0.85; // Slightly slower for a calmer voice
-          utterance.pitch = 1.05; // Slightly higher pitch to sound friendly
+          utterance.rate = 0.85; 
+          utterance.pitch = 1.05; 
           window.speechSynthesis.speak(utterance);
         }
       };
 
-      // Speak immediately when a new item is detected
       announce(); 
-      // Then repeat the voice continuously every 5 seconds until accepted
       intervalId = setInterval(announce, 5000); 
     } else {
       if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel(); // Stop talking immediately if cleared
+        window.speechSynthesis.cancel(); 
       }
     }
 
@@ -99,8 +95,10 @@ export default function Admin() {
 
   const secureApiCall = async (url, options = {}) => {
     let token = localStorage.getItem('admin_access_token');
+    if (!token) throw new Error("No token");
+
     let headers = { 'Content-Type': 'application/json', ...options.headers };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
+    headers['Authorization'] = `Bearer ${token}`;
 
     let res = await fetch(url, { ...options, headers });
     if (res.status === 401 || res.status === 403) {
@@ -117,7 +115,12 @@ export default function Admin() {
         } else {
           localStorage.clear();
           navigate('/admin-login');
+          throw new Error("Session expired");
         }
+      } else {
+        localStorage.clear();
+        navigate('/admin-login');
+        throw new Error("Session expired");
       }
     }
     return res;
@@ -148,13 +151,13 @@ export default function Admin() {
       review: { text: "New review submitted", title: "New Review Pending" }
     };
     
-    // We only need desktop notifications here, voice is handled by the useEffect loop
     if ('Notification' in window && Notification.permission === 'granted') {
       new Notification(alerts[type]?.title, { body: alerts[type]?.text, icon: '/vite.svg' });
     }
   };
 
   const loadData = async () => {
+    if (!localStorage.getItem('admin_access_token')) return; // STOP UNAUTHORIZED SPAM
     try {
       const [o, b, m, h, msg, r] = await Promise.all([
         secureApiCall(`${API_BASE}/orders/`).then(res => res.json()),
@@ -165,7 +168,7 @@ export default function Admin() {
         secureApiCall(`${API_BASE}/reviews/`).then(res => res.json())
       ]);
       setData({ orders: o, bookings: b, menu: m, hotel: h, messages: msg, reviews: r });
-    } catch (e) { console.log("Silent refresh failed"); }
+    } catch (e) { console.log("Data sync aborted."); }
   };
 
   useEffect(() => {
@@ -178,10 +181,9 @@ export default function Admin() {
     
     const connectWs = () => {
       const token = localStorage.getItem('admin_access_token');
-      if (!token) return;
+      if (!token) return; // PREVENT WS CONNECTION SPAM IF LOGGED OUT
       
       const wsUrl = `${WS_BASE}/ws/admin-notifications/?token=${token}`;
-      
       ws = new WebSocket(wsUrl);
       
       ws.onopen = () => { console.log("✅ WebSocket Connected Successfully!"); };
@@ -195,7 +197,9 @@ export default function Admin() {
       ws.onerror = (error) => { console.error("❌ WebSocket Error:", error); };
 
       ws.onclose = () => { 
-        reconnectTimer = setTimeout(connectWs, 3000); 
+        if (localStorage.getItem('admin_access_token')) {
+            reconnectTimer = setTimeout(connectWs, 3000); 
+        }
       };
     };
 
