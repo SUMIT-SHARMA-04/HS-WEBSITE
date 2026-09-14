@@ -85,9 +85,6 @@ if redis_url:
             "BACKEND": "channels_redis.core.RedisChannelLayer",
             "CONFIG": {
                 "hosts": [redis_url],
-                "health_check_interval": 10,  # Keeps Render connections from dropping
-                "socket_connect_timeout": 5,
-                "socket_timeout": 5,
             },
         }
     }
