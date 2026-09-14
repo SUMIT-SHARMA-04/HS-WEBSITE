@@ -2,7 +2,7 @@ import logging
 import json
 import re
 import os
-import traceback
+import threading
 from datetime import date
 from django.db import transaction, IntegrityError
 from django.core.mail import send_mail
@@ -21,15 +21,16 @@ from .serializers import BillSerializer, MenuItemSerializer, BookingSerializer, 
 logger = logging.getLogger(__name__)
 
 # ==============================================================================
-# EMAIL NOTIFICATION ENGINE (SYNCHRONOUS)
+# EMAIL NOTIFICATION ENGINE (ASYNCHRONOUS BACKGROUND THREAD)
 # ==============================================================================
-def send_email_sync(subject, body, from_email, recipient_list):
+def send_email_task(subject, body, from_email, recipient_list):
     if not from_email:
         logger.error("Email Delivery Skipped: EMAIL_HOST_USER is not configured in environment.")
         return
         
     try:
-        send_mail(subject=subject, message=body, from_email=from_email, recipient_list=recipient_list, fail_silently=False)
+        # Fails silently if Render's network drops the connection
+        send_mail(subject=subject, message=body, from_email=from_email, recipient_list=recipient_list, fail_silently=True)
         logger.info(f"Email successfully sent to {recipient_list}")
     except Exception as e:
         logger.error(f"Email Delivery Failed: {e}")
@@ -45,12 +46,16 @@ def notify_owner(event_type):
     }
     
     if event_type in email_alerts:
-        send_email_sync(
-            email_alerts[event_type]['subject'], 
-            email_alerts[event_type]['body'], 
-            settings.EMAIL_HOST_USER, 
-            [OWNER_EMAIL]
-        )
+        # Pushes the email to a background thread to unblock the HTTP request instantly
+        threading.Thread(
+            target=send_email_task,
+            args=(
+                email_alerts[event_type]['subject'], 
+                email_alerts[event_type]['body'], 
+                settings.EMAIL_HOST_USER, 
+                [OWNER_EMAIL]
+            )
+        ).start()
 
 def trigger_admin_websocket(event_type):
     try:
@@ -128,7 +133,6 @@ class CheckoutView(APIView):
             if not created and (active_tab.guest_name.lower() != guest_name.lower() or active_tab.guest_phone != guest_phone):
                 return Response({"error": "Verification failed. Name and Phone do not match the registered room folio."}, status=status.HTTP_403_FORBIDDEN)
 
-            # RACE CONDITION FIX: Catch the IntegrityError if another thread beat us to the database
             try:
                 with transaction.atomic():
                     bill = Bill.objects.create(hotel_tab=active_tab, order_type='Hotel', items_json=data.get('items_json'), total_amount=true_total_amount, status='Pending', idempotency_key=idempotency_key)
@@ -155,7 +159,6 @@ class CheckoutView(APIView):
 
             customer, _ = Customer.objects.get_or_create(phone=customer_phone, defaults={'name': customer_name})
             
-            # RACE CONDITION FIX: Catch the IntegrityError if another thread beat us to the database
             try:
                 with transaction.atomic():
                     bill = Bill.objects.create(customer=customer, order_type='Standard', items_json=data.get('items_json'), total_amount=true_total_amount, status='Pending', idempotency_key=idempotency_key)
