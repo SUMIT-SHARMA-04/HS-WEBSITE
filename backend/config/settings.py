@@ -85,6 +85,8 @@ if redis_url:
             "BACKEND": "channels_redis.core.RedisChannelLayer",
             "CONFIG": {
                 "hosts": [redis_url],
+                # Maintain connection alive without forcing a read timeout
+                "health_check_interval": 30,
             },
         }
     }
