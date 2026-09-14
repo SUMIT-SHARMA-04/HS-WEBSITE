@@ -91,8 +91,16 @@ if redis_url:
                         # channels_redis pops "address" off this dict and spreads the rest
                         # straight into ConnectionPool.from_url(address, **host), so a nested
                         # "kwargs" key gets forwarded literally as a keyword arg named "kwargs".
+                        "socket_connect_timeout": 5,
+                        # channels_redis blocks on BZPOPMIN with its own internal 5s timeout
+                        # to listen for group messages. If socket_timeout is <= that (redis-py
+                        # defaults to 5s when unset), the client's read timeout races Redis's
+                        # own "nothing happened" response and randomly raises TimeoutError.
+                        # Keep this safely above 5s so the blocking read always wins the race.
+                        "socket_timeout": 20,
                         "socket_keepalive": True,
                         "health_check_interval": 30,
+                        "retry_on_timeout": True,
                     }
                 ],
             },
