@@ -1,6 +1,8 @@
 import uuid
-from django.db import models
+
 from django.core.validators import MaxValueValidator
+from django.db import models
+
 
 class Customer(models.Model):
     name = models.CharField(max_length=150)
@@ -19,6 +21,15 @@ class HotelTab(models.Model):
 
     class Meta:
         indexes = [models.Index(fields=['room_number', 'is_active'])]
+        constraints = [
+            # Stops two concurrent first-time orders for the same room from
+            # creating two separate "active" folios for it.
+            models.UniqueConstraint(
+                fields=['room_number'],
+                condition=models.Q(is_active=True),
+                name='unique_active_room',
+            )
+        ]
 
     def __str__(self):
         return f"Room {self.room_number} ({self.guest_name}) - {'Active' if self.is_active else 'Closed'}"
@@ -32,13 +43,22 @@ class Bill(models.Model):
         ('Completed', 'Completed'),
         ('Rejected', 'Rejected'),
     )
+
+    class OrderType(models.TextChoices):
+        STANDARD = 'Standard', 'Standard'
+        HOTEL = 'Hotel', 'Hotel'
+
     customer = models.ForeignKey(Customer, related_name='bills', on_delete=models.CASCADE, null=True, blank=True)
     hotel_tab = models.ForeignKey(HotelTab, related_name='room_charges', on_delete=models.CASCADE, null=True, blank=True)
-    order_type = models.CharField(max_length=20, default='Standard') 
+    order_type = models.CharField(max_length=20, choices=OrderType.choices, default=OrderType.STANDARD)
     items_json = models.JSONField() 
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
     idempotency_key = models.CharField(max_length=255, unique=True, null=True, blank=True)
+    # Set once a Razorpay order is created for this bill, and once that
+    # payment is verified — see CreatePaymentOrderView / VerifyPaymentView.
+    razorpay_order_id = models.CharField(max_length=100, null=True, blank=True)
+    razorpay_payment_id = models.CharField(max_length=100, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -58,6 +78,11 @@ class MenuItem(models.Model):
         return self.name
 
 class Booking(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'Pending', 'Pending'
+        ACCEPTED = 'Accepted', 'Accepted'
+        REJECTED = 'Rejected', 'Rejected'
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     customer_name = models.CharField(max_length=150)
     email = models.EmailField()
@@ -66,7 +91,7 @@ class Booking(models.Model):
     time = models.CharField(max_length=20)
     guests = models.IntegerField(validators=[MaxValueValidator(12)])
     special_requests = models.TextField(blank=True, null=True)
-    status = models.CharField(max_length=20, default='Pending')
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
 
 class Contact(models.Model):
     name = models.CharField(max_length=150)

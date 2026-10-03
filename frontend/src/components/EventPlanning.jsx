@@ -1,23 +1,8 @@
 import { ArrowRight } from 'lucide-react';
-import { useEffect } from 'react';
+import useReveal from '@/hooks/useReveal';
 
 export default function EventPlanning() {
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add('animate-in-view');
-          }
-        });
-      },
-      { threshold: 0.15 }
-    );
-
-    const elements = document.querySelectorAll('[data-reveal]');
-    elements.forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
-  }, []);
+  useReveal();
 
   return (
     <section id="events" className="py-16 bg-cream-50 px-6">

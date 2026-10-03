@@ -1,16 +1,17 @@
 import { useState, useEffect } from 'react';
 import { Calendar, Clock, Users, CheckCircle, XCircle, Loader } from 'lucide-react';
 import toast from 'react-hot-toast';
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-const WS_BASE = API_BASE.replace(/^http/, 'ws');
+import useReveal from '@/hooks/useReveal';
+import useLiveSocket from '@/hooks/useLiveSocket';
+import FloatingInput from './FloatingInput';
+import { API_BASE, WS_BASE } from '@/config/api';
 
 const timeSlots = ['12:00 PM', '12:30 PM', '1:00 PM', '1:30 PM', '6:00 PM', '6:30 PM', '7:00 PM', '7:30 PM', '8:00 PM', '8:30 PM', '9:00 PM'];
 const empty = { name: '', email: '', phone: '', date: '', time: '', guests: '2', special_requests: '', policy: '' };
 
 export default function Booking() {
   const [form, setForm] = useState(empty);
-  const [bookingStatus, setBookingStatus] = useState('idle'); 
+  const [bookingStatus, setBookingStatus] = useState('idle');
   const [liveBookingId, setLiveBookingId] = useState(null);
   const [liveStatus, setLiveStatus] = useState('Pending');
   const [today, setToday] = useState('');
@@ -19,55 +20,37 @@ export default function Booking() {
     const now = new Date();
     const offset = now.getTimezoneOffset() * 60000;
     setToday(new Date(now.getTime() - offset).toISOString().split('T')[0]);
-  }, []);
-
-  useEffect(() => {
     const savedBooking = localStorage.getItem('my_active_booking');
-    if (savedBooking) {
-      setLiveBookingId(savedBooking);
-      setBookingStatus('tracking');
-    }
+    if (savedBooking) { setLiveBookingId(savedBooking); setBookingStatus('tracking'); }
   }, []);
 
-  useEffect(() => {
-    let ws;
-    let reconnectTimer;
-    
-    if (bookingStatus === 'tracking' && liveBookingId) {
-      fetch(`${API_BASE}/bookings/${liveBookingId}/`)
-        .then(res => {
-          if (res.ok) return res.json();
-          if (res.status === 404) setLiveStatus('Rejected');
-        })
-        .then(data => { if (data && data.status) setLiveStatus(data.status); })
-        .catch(() => {});
+  const isTracking = bookingStatus === 'tracking' && !!liveBookingId;
 
-      const connectWs = () => {
-        ws = new WebSocket(`${WS_BASE}/ws/bookings/${liveBookingId}/`);
-        ws.onmessage = (event) => {
+  // one-time REST check when tracking starts, in case the booking was
+  // already decided before the socket connects
+  useEffect(() => {
+    if (!isTracking) return;
+    fetch(`${API_BASE}/bookings/${liveBookingId}/`)
+      .then(res => { if (res.ok) return res.json(); if (res.status === 404) setLiveStatus('Rejected'); })
+      .then(data => { if (data && data.status) setLiveStatus(data.status); })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTracking, liveBookingId]);
+
+  useLiveSocket(
+    `${WS_BASE}/ws/bookings/${liveBookingId}/`,
+    {
+      onMessage: (event) => {
+        try {
           const data = JSON.parse(event.data);
-          setLiveStatus(data.status);
-        };
-        ws.onclose = () => { reconnectTimer = setTimeout(connectWs, 3000); };
-      };
-      
-      connectWs();
-    }
-    return () => { 
-      clearTimeout(reconnectTimer);
-      if (ws) { ws.onclose = null; ws.close(); }
-    };
-  }, [bookingStatus, liveBookingId]);
+          if (data?.status) setLiveStatus(data.status);
+        } catch (e) { console.error('Bad booking WS payload:', e); }
+      },
+    },
+    { enabled: isTracking, restartKey: liveBookingId }
+  );
 
-  useEffect(() => {
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) entry.target.classList.add('animate-in-view');
-      });
-    }, { threshold: 0.15 });
-    document.querySelectorAll('[data-reveal]').forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
-  }, [bookingStatus]);
+  useReveal([bookingStatus]);
 
   function set(field, value) { setForm((f) => ({ ...f, [field]: value })); }
 
@@ -75,55 +58,32 @@ export default function Booking() {
     e.preventDefault();
     setBookingStatus('loading');
     const combinedRequests = `[Policy: ${form.policy}] ${form.special_requests}`;
-
     try {
       const response = await fetch(`${API_BASE}/bookings/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customer_name: form.name,
-          email: form.email,
-          customer_phone: form.phone,
-          date: form.date,
-          time: form.time,
-          guests: parseInt(form.guests, 10),
-          special_requests: combinedRequests,
-          status: 'Pending'
-        }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customer_name: form.name, email: form.email, customer_phone: form.phone, date: form.date, time: form.time, guests: parseInt(form.guests, 10), special_requests: combinedRequests, status: 'Pending' }),
       });
-
       if (!response.ok) throw new Error('Failed to book table');
-
       const data = await response.json();
-      setLiveBookingId(data.id);
-      setLiveStatus(data.status);
-      localStorage.setItem('my_active_booking', data.id);
-      
-      setBookingStatus('tracking');
-      setForm(empty);
-    } catch (err) {
-      toast.error('Something went wrong. Please try again or call us directly.');
-      setBookingStatus('idle');
-    }
+      setLiveBookingId(data.id); setLiveStatus(data.status); localStorage.setItem('my_active_booking', data.id);
+      setBookingStatus('tracking'); setForm(empty);
+    } catch (err) { toast.error('Booking failed. Please call us directly.'); setBookingStatus('idle'); }
   }
 
-  const closeTracker = () => {
-    setBookingStatus('idle');
-    localStorage.removeItem('my_active_booking');
-  };
+  const closeTracker = () => { setBookingStatus('idle'); localStorage.removeItem('my_active_booking'); };
 
   if (bookingStatus === 'tracking') {
     return (
-      <section id="book" className="py-24 bg-cream-100">
-        <div className="max-w-2xl mx-auto px-6 text-center animate-fade-in bg-white p-10 rounded-3xl shadow-xl border border-cream-200">
+      <section id="book" className="py-32 bg-cream-50">
+        <div className="max-w-2xl mx-auto px-6 text-center animate-fade-in bg-white p-12 shadow-[0_15px_40px_rgba(38,19,9,0.05)] border border-cream-200">
           {liveStatus === 'Pending' && (
-            <><div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-6"><Clock className="w-10 h-10 text-amber-600 animate-pulse" /></div><h2 className="font-serif text-3xl font-bold text-brown-900 mb-4">Request Sent to Restaurant</h2><p className="text-brown-600 leading-relaxed mb-8">Please wait while our staff reviews your request.</p></>
+            <><div className="w-16 h-16 bg-cream-100 rounded-full flex items-center justify-center mx-auto mb-6"><Clock className="w-8 h-8 text-gold-600 animate-pulse" /></div><h2 className="font-serif text-3xl font-bold text-brown-900 mb-4">Request Sent to Host</h2><p className="text-brown-600 leading-relaxed mb-8">Please wait while our host reviews your reservation.</p></>
           )}
           {liveStatus === 'Accepted' && (
-            <><div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6"><CheckCircle className="w-10 h-10 text-green-600" /></div><h2 className="font-serif text-3xl font-bold text-brown-900 mb-4">Reservation Confirmed!</h2><p className="text-brown-600 leading-relaxed mb-8">Your table is ready.</p><button onClick={closeTracker} className="btn-gold px-8 py-3.5 rounded-full font-medium">Book Another Table</button></>
+            <><div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6"><CheckCircle className="w-8 h-8 text-green-600" /></div><h2 className="font-serif text-3xl font-bold text-brown-900 mb-4">Reservation Confirmed</h2><p className="text-brown-600 leading-relaxed mb-8">We look forward to hosting you.</p><button onClick={closeTracker} className="bg-brown-900 text-gold-400 uppercase tracking-widest text-xs font-bold px-8 py-4 rounded-none hover:bg-brown-800 transition-colors active-scale">Book Another Table</button></>
           )}
           {liveStatus === 'Rejected' && (
-            <><div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6"><XCircle className="w-10 h-10 text-red-600" /></div><h2 className="font-serif text-3xl font-bold text-brown-900 mb-4">Reservation Declined</h2><p className="text-brown-600 leading-relaxed mb-8">Unfortunately, we cannot accommodate your request.</p><button onClick={closeTracker} className="btn-gold px-8 py-3.5 rounded-full font-medium">Return to Form</button></>
+            <><div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6"><XCircle className="w-8 h-8 text-red-600" /></div><h2 className="font-serif text-3xl font-bold text-brown-900 mb-4">Fully Booked</h2><p className="text-brown-600 leading-relaxed mb-8">Unfortunately, we cannot accommodate your request at this time.</p><button onClick={closeTracker} className="bg-brown-900 text-gold-400 uppercase tracking-widest text-xs font-bold px-8 py-4 rounded-none hover:bg-brown-800 transition-colors active-scale">Return to Form</button></>
           )}
         </div>
       </section>
@@ -131,79 +91,91 @@ export default function Booking() {
   }
 
   return (
-    <section id="book" className="py-24 bg-cream-100">
-      <div className="max-w-7xl mx-auto px-6">
-        <div className="flex flex-col lg:grid lg:grid-cols-2 gap-10 lg:gap-16 items-start">
-          <div className="order-2 lg:order-1" data-reveal>
-            <p className="text-gold-600 text-sm font-medium uppercase tracking-[0.25em] mb-3">Reservations</p>
-            <h2 className="font-serif text-4xl md:text-5xl font-bold text-brown-900 mb-4">Book a Table</h2>
-            <div className="w-16 gold-divider mb-8" />
-            <p className="text-brown-600 leading-relaxed mb-4">Secure your table at High Spirits Cafe. To ensure a premium experience for all guests during busy hours, we require an agreement to our dining policy.</p>
-            <div className="bg-red-50 border border-red-100 rounded-xl p-4 mb-8">
-              <p className="text-sm text-red-800 font-medium">⚠️ Dining Policy</p>
-              <p className="text-xs text-red-600 mt-1">Guests must either order food items from the menu OR agree to a flat ₹200 per person, per hour seating charge.</p>
+    <section id="book" className="py-32 bg-cream-100 overflow-hidden relative">
+      <div className="bg-animated-grid" />
+
+      <div className="max-w-7xl mx-auto px-6 relative z-10">
+        <div className="flex flex-col lg:grid lg:grid-cols-2 gap-16 lg:gap-24 items-start">
+
+          <div className="order-2 lg:order-1" data-reveal="left">
+            <p className="text-gold-600 text-xs font-bold uppercase tracking-[0.2em] mb-4">Reservations</p>
+            <h2 className="font-serif text-4xl md:text-5xl font-bold text-brown-900 mb-6">Secure Your Table</h2>
+            <div className="w-12 h-[2px] bg-gold-400 mb-8" />
+
+            <p className="text-brown-600 leading-loose mb-10 text-sm">
+              To ensure a premium and uninterrupted dining experience for all our guests during peak hours, we require an agreement to our dining policy prior to arrival.
+            </p>
+
+            <div className="bg-transparent border-l-2 border-gold-400 pl-6 mb-12">
+              <p className="text-sm font-bold text-brown-900 mb-2 uppercase tracking-widest">Dining Policy</p>
+              <p className="text-sm text-brown-600 leading-relaxed">
+                Guests must either order food items from the menu OR agree to a flat ₹200 per person, per hour seating charge for space utilization.
+              </p>
             </div>
-            <div className="grid grid-cols-3 gap-4">
+
+            <div className="grid grid-cols-3 gap-6 pt-8 border-t border-brown-900/10">
               {[{ icon: Calendar, label: 'Lunch', sub: '12:00 – 2:30 PM' }, { icon: Clock, label: 'Dinner', sub: '6:00 – 10:00 PM' }, { icon: Users, label: 'Capacity', sub: 'Up to 80 guests' },].map(({ icon: Icon, label, sub }) => (
-                <div key={label} className="bg-gradient-to-br from-cream-200 to-gold-50 border border-gold-200 rounded-xl p-4 text-center">
-                  <Icon className="w-5 h-5 text-gold-600 mx-auto mb-2" />
-                  <p className="font-medium text-brown-800 text-sm">{label}</p>
-                  <p className="text-brown-500 text-xs mt-1">{sub}</p>
+                <div key={label} className="text-left">
+                  <Icon className="w-5 h-5 text-gold-600 mb-3" />
+                  <p className="font-bold text-brown-900 text-xs uppercase tracking-wider mb-1">{label}</p>
+                  <p className="text-brown-500 text-xs">{sub}</p>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="order-1 lg:order-2 w-full bg-white rounded-2xl shadow-lg p-6 md:p-8 border border-cream-200" data-reveal>
-            <h3 className="font-serif text-2xl font-semibold text-brown-900 mb-6">Reservation Details</h3>
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div>
-                <label className="block text-sm font-medium text-brown-700 mb-1.5">Table Policy Agreement <span className="text-red-500">*</span></label>
-                <select required value={form.policy} onChange={(e) => set('policy', e.target.value)} className="w-full border border-gold-300 bg-gold-50/30 rounded-xl px-4 py-3 text-brown-900 form-field transition text-sm">
-                  <option value="" disabled>Select your agreement...</option>
-                  <option value="Will Order Food">I agree to order food items from the menu.</option>
-                  <option value="Space Charge Accepted">I am booking space only (I accept the ₹200/hr/person charge).</option>
-                </select>
+          <div className="order-1 lg:order-2 w-full bg-white p-8 md:p-12 shadow-[0_10px_40px_rgba(38,19,9,0.05)] relative" data-reveal="right">
+            <div className="absolute top-0 right-0 w-16 h-16 border-t-2 border-r-2 border-gold-400/50 m-4 pointer-events-none hidden md:block" />
+
+            <form onSubmit={handleSubmit} className="space-y-6 relative z-10 pt-2">
+
+              <FloatingInput id="bName" label="Full Name *" value={form.name} onChange={(e) => set('name', e.target.value)} required pattern="^[A-Za-z\s\-\.]{3,50}$" />
+
+              <div className="grid grid-cols-2 gap-8">
+                <FloatingInput id="bEmail" label="Email Address *" type="email" value={form.email} onChange={(e) => set('email', e.target.value)} required />
+                <FloatingInput id="bPhone" label="Phone Number *" type="tel" value={form.phone} onChange={(e) => set('phone', e.target.value)} required pattern="^[6-9]\d{9}$" />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-brown-700 mb-1.5">Full Name <span className="text-red-500">*</span></label>
-                <input type="text" required pattern="^[A-Za-z\s\-\.]{3,50}$" title="Name must contain only letters, spaces, hyphens, or dots (min 3 characters)" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Your name" className="w-full border border-cream-300 rounded-xl px-4 py-3 text-brown-900 form-field transition" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+
+              <FloatingInput id="bRequests" label="Dietary Needs / Requests" value={form.special_requests} onChange={(e) => set('special_requests', e.target.value)} textarea rows={2} />
+
+              <div className="grid grid-cols-2 gap-8 pt-4">
                 <div>
-                  <label className="block text-sm font-medium text-brown-700 mb-1.5">Email <span className="text-red-500">*</span></label>
-                  <input type="email" required value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="email@example.com" className="w-full border border-cream-300 rounded-xl px-4 py-3 text-brown-900 form-field transition text-sm" />
+                  <label className="block text-[10px] uppercase tracking-widest text-brown-400 font-bold mb-2">Date *</label>
+                  <input type="date" required min={today} value={form.date} onChange={(e) => set('date', e.target.value)} className="w-full bg-transparent border-b border-brown-900/30 py-3 text-sm focus:outline-none focus:border-gold-400 text-brown-900 uppercase tracking-wider" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-brown-700 mb-1.5">Phone <span className="text-red-500">*</span></label>
-                  <input type="tel" required pattern="^[6-9]\d{9}$" title="Please enter a valid 10-digit mobile number" value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="+1 (555) 000-0000" className="w-full border border-cream-300 rounded-xl px-4 py-3 text-brown-900 form-field transition text-sm" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-brown-700 mb-1.5">Date <span className="text-red-500">*</span></label>
-                  <input type="date" required min={today} value={form.date} onChange={(e) => set('date', e.target.value)} className="w-full border border-cream-300 rounded-xl px-4 py-3 text-brown-900 form-field transition text-sm" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-brown-700 mb-1.5">Guests <span className="text-red-500">*</span></label>
-                  <select required value={form.guests} onChange={(e) => set('guests', e.target.value)} className="w-full border border-cream-300 rounded-xl px-4 py-3 text-brown-900 form-field transition text-sm bg-white">
+                  <label className="block text-[10px] uppercase tracking-widest text-brown-400 font-bold mb-2">Party Size *</label>
+                  <select required value={form.guests} onChange={(e) => set('guests', e.target.value)} className="w-full bg-transparent border-b border-brown-900/30 py-3 text-sm focus:outline-none focus:border-gold-400 text-brown-900 cursor-pointer">
+                    <option value="" disabled>Select</option>
                     {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => (<option key={n} value={n}>{n} {n === 1 ? 'Guest' : 'Guests'}</option>))}
                   </select>
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-brown-700 mb-1.5">Preferred Time <span className="text-red-500">*</span></label>
-                <div className="grid grid-cols-4 gap-2">
+
+              <div className="pt-2">
+                <label className="block text-[10px] uppercase tracking-widest text-brown-400 font-bold mb-2">Dining Policy *</label>
+                <select required value={form.policy} onChange={(e) => set('policy', e.target.value)} className="w-full bg-transparent border-b border-brown-900/30 py-3 text-sm focus:outline-none focus:border-gold-400 text-brown-900 cursor-pointer">
+                  <option value="" disabled>Select Agreement</option>
+                  <option value="Will Order Food">I will order food from the menu</option>
+                  <option value="Space Charge Accepted">I am booking space only (₹200/hr/person)</option>
+                </select>
+              </div>
+
+              <div className="pt-6">
+                <label className="block text-[10px] uppercase tracking-widest text-brown-900 font-bold mb-4">Preferred Time *</label>
+                <div className="flex flex-wrap gap-3">
                   {timeSlots.map((t) => (
-                    <button type="button" key={t} onClick={() => set('time', t)} className={`py-2 text-xs rounded-lg border font-medium transition-all duration-300 ${form.time === t ? 'bg-brown-900 text-white border-brown-900' : 'bg-white text-brown-600 border-cream-300 hover:border-brown-400'}`}>{t}</button>
+                    <button type="button" key={t} onClick={() => set('time', t)} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all duration-300 border active-scale ${form.time === t ? 'bg-brown-900 text-gold-400 border-brown-900 shadow-md' : 'bg-transparent text-brown-500 border-brown-900/10 hover:border-gold-400 hover:text-brown-900'}`}>{t}</button>
                   ))}
                 </div>
               </div>
-              <button type="submit" disabled={bookingStatus === 'loading' || !form.time} className="w-full bg-brown-700 text-cream-100 font-medium py-4 rounded-xl hover:bg-brown-800 disabled:opacity-60 transition-colors flex items-center justify-center gap-2">
-                {bookingStatus === 'loading' ? <><Loader className="w-4 h-4 animate-spin" /> Requesting Table…</> : 'Send Request to Staff'}
+
+              <button type="submit" disabled={bookingStatus === 'loading' || !form.time} className="w-full bg-brown-900 text-cream-50 text-xs font-bold uppercase tracking-[0.2em] py-5 mt-6 hover:bg-brown-800 disabled:opacity-50 transition-colors flex items-center justify-center gap-3 rounded-none active-scale">
+                {bookingStatus === 'loading' ? <><Loader className="w-4 h-4 animate-spin" /> Transmitting...</> : 'Confirm Request'}
               </button>
             </form>
           </div>
+
         </div>
       </div>
     </section>

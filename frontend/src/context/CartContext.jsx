@@ -1,8 +1,8 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import { API_BASE } from '@/config/api';
+import { VALID_ROOMS } from '@/config/rooms';
 
 const CartContext = createContext();
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-const VALID_ROOMS = ['101', '102', '103', '104', '105', '106', '107', '108'];
 
 export function CartProvider({ children }) {
   const [cart, setCart] = useState(() => {
@@ -18,16 +18,19 @@ export function CartProvider({ children }) {
   const [hotelRoom, setHotelRoom] = useState(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const room = urlParams.get('room');
-    
-    // Validate the room before saving it to local storage to prevent poisoning the session
+
+    // reject unknown room codes so a bad ?room= link can't poison the session
     if (room && VALID_ROOMS.includes(room)) {
-      localStorage.setItem('hsc_room', room);
+      sessionStorage.setItem('hsc_room', room);
       return room;
     } else if (room && !VALID_ROOMS.includes(room)) {
       return null;
     }
-    
-    return localStorage.getItem('hsc_room') || null;
+
+    // sessionStorage, not localStorage: a room scanned once shouldn't
+    // silently apply to every future visit — only this browser tab, until
+    // it's closed
+    return sessionStorage.getItem('hsc_room') || null;
   });
 
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -38,7 +41,7 @@ export function CartProvider({ children }) {
         .then(res => res.json())
         .then(data => {
           const menuArray = Array.isArray(data) ? data : data.results || [];
-          setCart(prevCart => 
+          setCart(prevCart =>
             prevCart.map(cartItem => {
               const latestItem = menuArray.find(m => m.id === cartItem.id);
               return latestItem ? { ...cartItem, price: latestItem.price, name: latestItem.name } : cartItem;
@@ -87,7 +90,7 @@ export function CartProvider({ children }) {
 
   const clearRoom = () => {
     setHotelRoom(null);
-    localStorage.removeItem('hsc_room');
+    sessionStorage.removeItem('hsc_room');
   }
 
   const cartCount = cart.reduce((sum, item) => sum + (item.quantity || 1), 0);

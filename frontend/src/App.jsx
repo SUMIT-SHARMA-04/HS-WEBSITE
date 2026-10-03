@@ -1,13 +1,21 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AlertCircle } from 'lucide-react';
+import Lenis from 'lenis';
+import { Toaster } from 'react-hot-toast';
 import { CartProvider } from './context/CartContext';
+import { VALID_ROOMS } from './config/rooms';
 
-// --- COMPONENTS ---
+import Preloader from './components/Preloader';
+import CustomCursor from './components/CustomCursor';
+import MobileCartFab from './components/MobileCartFab';
+import ScrollToTop from './components/ScrollToTop';
+
 import Navbar from './components/Navbar';
 import CartDrawer from './components/CartDrawer';
+import ProtectedRoute from './components/ProtectedRoute';
+import ErrorBoundary from './components/ErrorBoundary';
 
-// --- PAGES ---
 import Home from './Pages/Home';
 import Admin from './Pages/Admin';
 import AdminLogin from './Pages/AdminLogin';
@@ -15,26 +23,35 @@ import AdminLogin from './Pages/AdminLogin';
 function MainLayout() {
   const urlParams = new URLSearchParams(window.location.search);
   const roomNumber = urlParams.get('room');
-  
-  // STRICT WHITELIST
-  const VALID_ROOMS = ['101', '102', '103', '104', '105', '106', '107', '108'];
+
   const isInvalidRoomLink = roomNumber && !VALID_ROOMS.includes(roomNumber);
 
-  // =========================================================================
-  // THE ROOT TRAP: If the room is invalid, return ONLY this error screen. 
-  // The rest of the website is completely destroyed and hidden from the browser.
-  // =========================================================================
+  useEffect(() => {
+    const lenis = new Lenis({
+      duration: 1.2,
+      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+      smoothWheel: true
+    });
+
+    function raf(time) {
+      lenis.raf(time);
+      requestAnimationFrame(raf);
+    }
+    requestAnimationFrame(raf);
+    return () => lenis.destroy();
+  }, []);
+
   if (isInvalidRoomLink) {
     return (
-      <div className="min-h-screen bg-cream-50 flex flex-col items-center justify-center p-6 text-center z-[99999]">
-        <AlertCircle className="w-20 h-20 text-red-500 mb-6 animate-bounce" />
-        <h1 className="text-4xl font-serif font-bold text-brown-900 mb-4">Invalid Access Link</h1>
-        <p className="text-brown-600 mb-8 max-w-md leading-relaxed text-lg">
-          The room number (<strong className="text-red-600">{roomNumber}</strong>) specified in your URL is not recognized by our system. Please scan the correct QR code inside your room.
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center z-[99999] bg-brown-950">
+        <AlertCircle className="w-20 h-20 text-gold-400 mb-6" />
+        <h1 className="text-4xl font-serif font-bold text-cream-50 mb-4 tracking-widest uppercase">Invalid Access Link</h1>
+        <p className="text-white/60 mb-8 max-w-md leading-relaxed text-sm font-light tracking-wide">
+          The room number (<strong className="text-gold-400">{roomNumber}</strong>) specified in your URL is not recognized by our system. Please scan the correct QR code inside your room.
         </p>
-        <button 
-          onClick={() => window.location.replace(window.location.pathname)} 
-          className="bg-brown-900 text-gold-400 px-8 py-4 rounded-xl font-bold shadow-lg hover:bg-brown-800 transition-colors"
+        <button
+          onClick={() => window.location.replace(window.location.pathname)}
+          className="bg-gold-500 text-brown-950 text-[10px] uppercase tracking-[0.2em] px-8 py-4 font-bold shadow-lg hover:bg-gold-400 transition-colors active-scale"
         >
           Remove Room & Browse Public Menu
         </button>
@@ -42,12 +59,32 @@ function MainLayout() {
     );
   }
 
-  // If the link is valid (or if they are a standard Walk-in guest), render the website
   return (
-    <div className="min-h-screen bg-cream-50 font-sans text-brown-900">
+    <div className="min-h-screen flex flex-col font-sans text-brown-900 bg-cream-50">
+      <Preloader />
+      <CustomCursor />
       <Navbar />
       <CartDrawer />
-      <main>
+      <MobileCartFab />
+      <ScrollToTop />
+
+      <Toaster
+        position="bottom-center"
+        toastOptions={{
+          style: {
+            background: '#261309',
+            color: '#f5d19d',
+            border: '1px solid rgba(212, 168, 65, 0.2)',
+            fontSize: '12px',
+            textTransform: 'uppercase',
+            letterSpacing: '0.1em',
+            borderRadius: '0px',
+            fontWeight: 'bold'
+          },
+        }}
+      />
+
+      <main className="flex-grow">
         <Home />
       </main>
     </div>
@@ -56,17 +93,23 @@ function MainLayout() {
 
 export default function App() {
   return (
-    <CartProvider>
-      <Router>
-        <Routes>
-          {/* Public Customer Website */}
-          <Route path="/" element={<MainLayout />} />
-          
-          {/* Secure Admin Portal Routes */}
-          <Route path="/admin" element={<Admin />} />
-          <Route path="/admin-login" element={<AdminLogin />} />
-        </Routes>
-      </Router>
-    </CartProvider>
+    <ErrorBoundary>
+      <CartProvider>
+        <Router>
+          <Routes>
+            <Route path="/" element={<MainLayout />} />
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute>
+                  <Admin />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/admin-login" element={<AdminLogin />} />
+          </Routes>
+        </Router>
+      </CartProvider>
+    </ErrorBoundary>
   );
 }

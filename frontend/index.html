@@ -4,9 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>High Spirits Cafe</title>
+    <meta name="description" content="High Spirits Cafe — pure vegetarian fine dining in Jaipur. Browse the menu, book a table, or order in-room via QR." />
+    <meta property="og:title" content="High Spirits Cafe" />
+    <meta property="og:description" content="Pure vegetarian fine dining in Jaipur — menu, table booking, and in-room ordering." />
+    <meta property="og:type" content="website" />
+    <meta name="theme-color" content="#1a0d06" />
     <!-- Your Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
-    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <!-- Razorpay's checkout.js was removed from here: nothing in the app
+         currently calls it (see README §13). Load it only inside the
+         checkout component once the online-payment flow is wired up. -->
   </head>
   <body>
     <!-- React injects the entire App inside this div -->

@@ -1,210 +1,225 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Inter:wght@300;400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Inter:wght@300;400;500;700&display=swap');
 
-/* Define your restaurant's custom brand colors here */
 @theme {
   --color-cream-50: #fdfbf7;
   --color-cream-100: #fbf7ee;
   --color-cream-200: #f5ddb8;
-  --color-cream-300: #ecd9a0;
-  --color-cream-400: #e3c878;
-  
   --color-brown-400: #a37252;
   --color-brown-500: #8b5a3e;
   --color-brown-600: #7c4822;
-  --color-brown-700: #5e3419;
-  --color-brown-800: #42220e;
   --color-brown-900: #261309;
   --color-brown-950: #1a0d06;
-  
-  --color-gold-50: #fdf5e6;
-  --color-gold-100: #fdf5e6;
-  --color-gold-200: #fae6c5;
   --color-gold-300: #f5d19d;
-  --color-gold-400: #f0bc74;
-  --color-gold-500: #e99d3e;
-  --color-gold-600: #d4a841;
-  --color-gold-700: #c4942a;
+  --color-gold-400: #d4a841;
+  --color-gold-500: #c4942a;
+  --color-gold-600: #a87a1f;
 }
 
 @layer base {
-  html {
-    scroll-behavior: smooth;
-  }
   body {
-    @apply bg-cream-100 text-brown-900 font-sans;
+    @apply bg-cream-50 text-brown-900 font-sans;
+    overflow-x: clip; /* keeps the sticky review cards in place */
   }
 }
 
 @layer utilities {
-  .font-serif {
-    font-family: 'Playfair Display', Georgia, serif;
+  .font-serif { font-family: 'Playfair Display', Georgia, serif; }
+}
+
+::selection { background: #d4a841; color: #261309; }
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #1a0d06; }
+::-webkit-scrollbar-thumb { background: #7c4822; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #d4a841; }
+
+@media (pointer: fine) {
+  .has-custom-cursor,
+  .has-custom-cursor a,
+  .has-custom-cursor button,
+  .has-custom-cursor input,
+  .has-custom-cursor select,
+  .has-custom-cursor textarea {
+    cursor: none !important;
   }
 }
-
-/* ===== Floating badge ===== */
-@keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-12px); }
-}
-.animate-float {
-  animation: float 3.5s ease-in-out infinite;
+@media (hover: none) and (pointer: coarse) {
+  * { -webkit-tap-highlight-color: transparent !important; }
+  .active-scale:active { transform: scale(0.96); transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1); }
 }
 
-/* ===== Scroll reveal ===== */
+*:focus-visible {
+  outline: 2px solid #d4a841 !important;
+  outline-offset: 4px !important;
+  border-radius: 2px;
+  transition: outline-offset 0.2s ease;
+}
+
+.glass-panel {
+  background: rgba(26, 13, 6, 0.45);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(212, 168, 65, 0.15);
+}
+
+/* Editorial inputs, padded to leave room for the floating label above */
+.input-editorial {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(124, 72, 34, 0.3);
+  border-radius: 0;
+  padding: 20px 0 8px 0;
+  color: #261309;
+  font-size: 0.875rem;
+  transition: border-color 0.4s ease, box-shadow 0.4s ease;
+}
+.input-editorial:focus { outline: none; border-bottom: 1px solid #d4a841; box-shadow: 0 1px 0 0 #d4a841; }
+.input-editorial::placeholder { color: transparent; }
+
+.input-editorial-dark {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0;
+  padding: 20px 0 8px 0;
+  color: #fdfbf7;
+  font-size: 0.875rem;
+  transition: border-color 0.4s ease, box-shadow 0.4s ease;
+}
+.input-editorial-dark:focus { outline: none; border-bottom: 1px solid #d4a841; box-shadow: 0 1px 0 0 #d4a841; }
+.input-editorial-dark::placeholder { color: transparent; }
+
+/* Floating label: sits over the input's placeholder, lifts on focus/fill.
+   Replaces the ~380-char peer-focus/peer-[:not(:placeholder-shown)] chain
+   that used to get pasted into every form field. */
+.field-label {
+  position: absolute;
+  left: 0;
+  top: 1.5rem;
+  font-size: 0.75rem;
+  color: #a37252;
+  pointer-events: none;
+  transition: all 0.3s ease;
+}
+.peer:focus ~ .field-label,
+.peer:not(:placeholder-shown) ~ .field-label {
+  top: 0;
+  font-size: 10px;
+  color: #a87a1f;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.field-label-dark { color: rgba(255, 255, 255, 0.4); }
+.peer:focus ~ .field-label-dark,
+.peer:not(:placeholder-shown) ~ .field-label-dark {
+  color: #d4a841;
+}
+
+/* Scroll reveals — driven by useReveal() */
 [data-reveal] {
   opacity: 0;
-  transform: translateY(28px);
-  transition: opacity 0.7s ease-out, transform 0.7s ease-out;
+  transform: translateY(40px);
+  transition: opacity 1.2s cubic-bezier(0.22, 1, 0.36, 1), transform 1.2s cubic-bezier(0.22, 1, 0.36, 1);
 }
-.animate-in-view {
+[data-reveal="left"] { transform: translateX(-80px); }
+[data-reveal="right"] { transform: translateX(80px); }
+[data-reveal].is-in,
+[data-reveal="left"].is-in,
+[data-reveal="right"].is-in {
   opacity: 1 !important;
-  transform: translateY(0) !important;
+  transform: translateX(0) translateY(0) !important;
 }
 
-/* ===== Hero entrance ===== */
-@keyframes fadeIn { 0% { opacity: 0; } 100% { opacity: 1; } }
-@keyframes slideUp {
-  0% { opacity: 0; transform: translateY(20px); }
-  100% { opacity: 1; transform: translateY(0); }
+/* Menu card deal-in animation */
+@keyframes dealCard {
+  0% { opacity: 0; transform: translateY(28px) scale(0.98); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
-.animate-fade-in { animation: fadeIn 0.6s ease-out both; }
-.animate-slide-up { animation: slideUp 0.7s ease-out both; }
+.animate-deal-card { opacity: 0; will-change: transform, opacity; animation: dealCard 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
 
-/* ===== Gold shimmer text ===== */
-@keyframes shimmer {
-  0% { background-position: -200% center; }
-  100% { background-position: 200% center; }
-}
-.shimmer-gold {
-  background: linear-gradient(
-    90deg,
-    #d4a841 0%,
-    #ecd9a0 25%,
-    #fff8ee 50%,
-    #ecd9a0 75%,
-    #d4a841 100%
-  );
-  background-size: 200% auto;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: shimmer 5s linear infinite;
-}
+/* Micro-interactions & loading states */
+@keyframes shimmerWave { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+.skeleton-card { background: linear-gradient(90deg, #fbf7ee 25%, #f5ddb8 50%, #fbf7ee 75%); background-size: 200% 100%; animation: shimmerWave 2s infinite linear; border-radius: 0px; }
+@keyframes slideInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+.animate-cascade { opacity: 0; animation: slideInUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+@keyframes progress { 0% { transform: scaleX(0); } 100% { transform: scaleX(1); } }
+.animate-progress { animation: progress 2.2s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+@keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+.animate-marquee { display: flex; width: max-content; animation: marquee 25s linear infinite; }
+.animate-marquee:hover { animation-play-state: paused; }
+@keyframes orderEatEnjoy { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.5; } 50% { transform: translateY(-8px) scale(1.1); opacity: 1; color: #d4a841; } }
+.animate-story-1 { animation: orderEatEnjoy 3s ease-in-out infinite 0s; }
+.animate-story-2 { animation: orderEatEnjoy 3s ease-in-out infinite 1s; }
+.animate-story-3 { animation: orderEatEnjoy 3s ease-in-out infinite 2s; }
 
-/* ===== Gold button ===== */
-.btn-gold {
-  background: linear-gradient(135deg, #d4a841, #a87a1f);
-  color: #261309;
-  position: relative;
-  overflow: hidden;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+/* Ambient backgrounds */
+@keyframes grainMove {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-2%, -2%); }
+  50% { transform: translate(1%, 2%); }
+  75% { transform: translate(-1%, -1%); }
 }
-.btn-gold::before {
-  content: '';
+.bg-grain {
   position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.4),
-    transparent
-  );
-  transition: left 0.6s ease;
-}
-.btn-gold:hover {
-  transform: translateY(-2px) scale(1.03);
-  box-shadow: 0 10px 30px -8px rgba(196, 148, 42, 0.5);
-}
-.btn-gold:hover::before {
-  left: 100%;
+  inset: -50%;
+  opacity: 0.05;
+  pointer-events: none;
+  z-index: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.4'/%3E%3C/svg%3E");
+  animation: grainMove 6s steps(4) infinite;
 }
 
-/* ===== Gold outline button ===== */
-.btn-gold-outline {
-  border: 1.5px solid #d4a841;
-  color: #ecd9a0;
-  background: transparent;
-  transition: all 0.3s ease;
-  position: relative;
-  overflow: hidden;
-  z-index: 1;
+@keyframes floatAurora {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(40px, -60px) scale(1.1); }
+  66% { transform: translate(-30px, 30px) scale(0.9); }
 }
-.btn-gold-outline::before {
-  content: '';
+.aurora-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.4;
+  animation: floatAurora 12s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+.aurora-orb-1 { background: #d4a841; width: 400px; height: 400px; }
+.aurora-orb-2 { background: #8b5a3e; width: 350px; height: 350px; animation-delay: -4s; }
+
+@keyframes gridPan {
+  0% { background-position: 0 0; }
+  100% { background-position: 40px 40px; }
+}
+.bg-animated-grid {
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, #d4a841, #a87a1f);
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  z-index: -1;
-}
-.btn-gold-outline:hover {
-  color: #261309;
-  border-color: #c4942a;
-  transform: translateY(-2px) scale(1.03);
-  box-shadow: 0 10px 30px -10px rgba(196, 148, 42, 0.4);
-}
-.btn-gold-outline:hover::before {
-  opacity: 1;
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+  background-image: linear-gradient(to right, rgba(212, 168, 65, 0.05) 1px, transparent 1px),
+                    linear-gradient(to bottom, rgba(212, 168, 65, 0.05) 1px, transparent 1px);
+  animation: gridPan 10s linear infinite;
 }
 
-/* ===== Animated tabs (menu / category) ===== */
-.tab-active {
-  background: linear-gradient(135deg, #7c4822, #5e3419);
-  color: #fff8ee;
-  box-shadow: 0 4px 14px -4px rgba(124, 72, 34, 0.5);
-  transform: translateY(-1px);
-}
-.tab-inactive {
-  background: #fffdf9;
-  color: #7c4822;
-  border: 1px solid #f5ddb8;
-  transition: all 0.3s ease;
-}
-.tab-inactive:hover {
-  border-color: #d4a841;
-  color: #5e3419;
-  background: #fbf7ee;
-  transform: translateY(-1px);
-}
-
-/* ===== Gold divider with glow ===== */
-.gold-divider {
-  background: linear-gradient(
-    90deg,
-    transparent,
-    #d4a841,
-    transparent
-  );
-  height: 1.5px;
-}
-
-/* ===== Soft pulse ===== */
-@keyframes softPulse {
-  0%, 100% { opacity: 0.5; }
-  50% { opacity: 1; }
-}
-.animate-soft-pulse { animation: softPulse 2s ease-in-out infinite; }
-
-/* ===== Gold ring on focus for form fields ===== */
-.form-field {
-  transition: border-color 0.25s ease, box-shadow 0.25s ease;
-}
-.form-field:focus {
-  border-color: #d4a841;
-  box-shadow: 0 0 0 3px rgba(212, 168, 65, 0.2);
-  outline: none;
-}
-
-/* ===== Cart Drawer Slide-In Animation ===== */
-@keyframes slideInRight {
-  from { transform: translateX(100%); }
-  to { transform: translateX(0); }
-}
-.animate-slide-in-right {
-  animation: slideInRight 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+/* Respect OS-level "reduce motion" — content still appears (just without
+   the animated transition), and purely decorative infinite loops stop
+   rather than flickering at near-zero duration. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-marquee,
+  .aurora-orb,
+  .bg-grain,
+  .bg-animated-grid,
+  .animate-story-1,
+  .animate-story-2,
+  .animate-story-3 {
+    animation: none !important;
+  }
 }

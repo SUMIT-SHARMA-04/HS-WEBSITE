@@ -2,30 +2,28 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast, { Toaster } from 'react-hot-toast';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { 
-  Utensils, CalendarDays, MonitorSmartphone, Search, RefreshCw, 
-  CheckCircle, XCircle, ChefHat, Printer, Trash2, 
-  Plus, Edit2, ClipboardList, Activity, LogOut, TrendingUp, 
+import {
+  Utensils, CalendarDays, MonitorSmartphone, Search, RefreshCw,
+  CheckCircle, XCircle, ChefHat, Printer, Trash2,
+  Plus, Edit2, ClipboardList, Activity, LogOut, TrendingUp,
   IndianRupee, Bed, Mail, Clock, Star, Volume2, VolumeX, Layers,
   QrCode
 } from 'lucide-react';
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-const wsProtocol = API_BASE.startsWith("https") ? "wss://" : "ws://";
-const wsHost = API_BASE.replace(/^https?:\/\//, "");
-const WS_BASE = `${wsProtocol}${wsHost}`;
+import { parseItems, safeParseItems } from '@/utils/parse';
+import { API_BASE, WS_BASE } from '@/config/api';
+import useLiveSocket from '@/hooks/useLiveSocket';
 
 export default function Admin() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('analytics'); 
+  const [activeTab, setActiveTab] = useState('analytics');
   const [data, setData] = useState({ orders: [], bookings: [], menu: [], hotel: [], messages: [], reviews: [] });
   const [orderSearch, setOrderSearch] = useState('');
-  
+
   const [isEditingMenu, setIsEditingMenu] = useState(false);
   const emptyMenu = { id: null, name: '', category: '', price: '', img: '', is_available: true };
   const [menuForm, setMenuForm] = useState(emptyMenu);
-  
-  const [menuFormMode, setMenuFormMode] = useState('standard'); 
+
+  const [menuFormMode, setMenuFormMode] = useState('standard');
   const [comboItems, setComboItems] = useState([]);
 
   const [posItems, setPosItems] = useState([]);
@@ -61,7 +59,7 @@ export default function Admin() {
 
     if (audioEnabled && hasPending && 'speechSynthesis' in window) {
       const announce = () => {
-        if (window.speechSynthesis.speaking) return; 
+        if (window.speechSynthesis.speaking) return;
 
         let msg = "";
         if (pending.o > 0) msg = "New order received.";
@@ -71,17 +69,17 @@ export default function Admin() {
 
         if (msg) {
           const utterance = new SpeechSynthesisUtterance(msg);
-          utterance.rate = 0.85; 
-          utterance.pitch = 1.05; 
+          utterance.rate = 0.85;
+          utterance.pitch = 1.05;
           window.speechSynthesis.speak(utterance);
         }
       };
 
-      announce(); 
-      intervalId = setInterval(announce, 5000); 
+      announce();
+      intervalId = setInterval(announce, 5000);
     } else {
       if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel(); 
+        window.speechSynthesis.cancel();
       }
     }
 
@@ -111,7 +109,7 @@ export default function Admin() {
           const tokenData = await refreshRes.json();
           localStorage.setItem('admin_access_token', tokenData.access);
           headers['Authorization'] = `Bearer ${tokenData.access}`;
-          res = await fetch(url, { ...options, headers }); 
+          res = await fetch(url, { ...options, headers });
         } else {
           localStorage.clear();
           navigate('/admin-login');
@@ -130,7 +128,7 @@ export default function Admin() {
     const newState = !audioEnabled;
     setAudioEnabled(newState);
     localStorage.setItem('hsc_admin_audio', newState);
-    
+
     if (newState && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance("Voice alerts enabled.");
@@ -150,14 +148,18 @@ export default function Admin() {
       message: { text: "New customer message", title: "New Message!" },
       review: { text: "New review submitted", title: "New Review Pending" }
     };
-    
+
     if ('Notification' in window && Notification.permission === 'granted') {
       new Notification(alerts[type]?.title, { body: alerts[type]?.text, icon: '/vite.svg' });
     }
   };
 
+  // list endpoints can come back as a bare array, or, if pagination is on,
+  // as { count, next, previous, results }. Always hand components an array.
+  const unwrap = (payload) => Array.isArray(payload) ? payload : (payload?.results || []);
+
   const loadData = async () => {
-    if (!localStorage.getItem('admin_access_token')) return; // STOP UNAUTHORIZED SPAM
+    if (!localStorage.getItem('admin_access_token')) return;
     try {
       const [o, b, m, h, msg, r] = await Promise.all([
         secureApiCall(`${API_BASE}/orders/`).then(res => res.json()),
@@ -167,7 +169,10 @@ export default function Admin() {
         secureApiCall(`${API_BASE}/contact/`).then(res => res.json()),
         secureApiCall(`${API_BASE}/reviews/`).then(res => res.json())
       ]);
-      setData({ orders: o, bookings: b, menu: m, hotel: h, messages: msg, reviews: r });
+      setData({
+        orders: unwrap(o), bookings: unwrap(b), menu: unwrap(m),
+        hotel: unwrap(h), messages: unwrap(msg), reviews: unwrap(r)
+      });
     } catch (e) { console.log("Data sync aborted."); }
   };
 
@@ -175,43 +180,31 @@ export default function Admin() {
     if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
     loadData();
     const pollInterval = setInterval(() => { loadData(); }, 15000);
-
-    let ws;
-    let reconnectTimer;
-    
-    const connectWs = () => {
-      const token = localStorage.getItem('admin_access_token');
-      if (!token) return; // PREVENT WS CONNECTION SPAM IF LOGGED OUT
-      
-      const wsUrl = `${WS_BASE}/ws/admin-notifications/?token=${token}`;
-      ws = new WebSocket(wsUrl);
-      
-      ws.onopen = () => { console.log("✅ WebSocket Connected Successfully!"); };
-      
-      ws.onmessage = (event) => {
-        const payload = JSON.parse(event.data);
-        alertOwner(payload.event);
-        loadData();
-      };
-
-      ws.onerror = (error) => { console.error("❌ WebSocket Error:", error); };
-
-      ws.onclose = () => { 
-        if (localStorage.getItem('admin_access_token')) {
-            reconnectTimer = setTimeout(connectWs, 3000); 
-        }
-      };
-    };
-
-    connectWs();
-
-    return () => {
-      clearInterval(pollInterval);
-      clearTimeout(reconnectTimer);
-      if (ws) { ws.onclose = null; ws.close(); }
-    };
+    return () => clearInterval(pollInterval);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useLiveSocket(
+    () => {
+      const token = localStorage.getItem('admin_access_token');
+      return token ? `${WS_BASE}/ws/admin-notifications/?token=${token}` : null;
+    },
+    {
+      onMessage: (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          alertOwner(payload.event);
+          loadData();
+        } catch (e) { console.error('Bad admin-notification WS payload:', e); }
+      },
+      onError: (error) => console.error('WebSocket error:', error),
+    },
+    {
+      backoff: 'fixed',
+      fixedDelay: 3000,
+      shouldReconnect: () => !!localStorage.getItem('admin_access_token'),
+    }
+  );
 
   useEffect(() => {
     if (menuFormMode === 'combo' && !isEditingMenu) {
@@ -232,9 +225,9 @@ export default function Admin() {
           options.headers = { 'Content-Type': 'application/json' };
       }
       const res = await secureApiCall(url, options);
-      if (res.ok) { 
-        toast.success(successMsg); 
-        await loadData(); 
+      if (res.ok) {
+        toast.success(successMsg);
+        await loadData();
       } else {
         const errText = await res.text();
         let errObj = {};
@@ -289,37 +282,37 @@ export default function Admin() {
   const handlePOSPrint = async (e) => {
     e.preventDefault();
     if (posItems.length === 0) return toast.error("Add items to print bill");
-    
+
     const cleanName = posCustomerName.trim() || 'Walk-in Customer';
-    
+
     try {
       const payload = {
-        order_type: 'Standard', 
-        customer_name: cleanName, 
+        order_type: 'Standard',
+        customer_name: cleanName,
         customer_phone: posCustomerPhone || '0000000000',
-        items_json: JSON.stringify(posItems), 
-        total_amount: posTotal, 
+        items_json: JSON.stringify(posItems),
+        total_amount: posTotal,
         idempotency_key: crypto.randomUUID()
       };
-      
+
       const response = await secureApiCall(`${API_BASE}/orders/checkout/`, { method: 'POST', body: JSON.stringify(payload) });
-      
+
       if (response.ok) {
         const orderData = await response.json();
         await secureApiCall(`${API_BASE}/orders/${orderData.order_id}/status/`, { method: 'PUT', body: JSON.stringify({ status: 'Completed' }) });
-        
-        setPrintData({ 
-          title: 'Standalone Bill', 
-          subtitle: `Guest: ${cleanName}`, 
-          items: posItems, 
-          total: posTotal 
+
+        setPrintData({
+          title: 'Standalone Bill',
+          subtitle: `Guest: ${cleanName}`,
+          items: posItems,
+          total: posTotal
         });
-        
+
         await loadData();
-        
-        setTimeout(() => { 
-          window.print(); 
-          setPosItems([]); 
+
+        setTimeout(() => {
+          window.print();
+          setPosItems([]);
           setPosCustomerName('Walk-in Customer');
           setPosCustomerPhone('0000000000');
         }, 500);
@@ -331,17 +324,14 @@ export default function Admin() {
   };
 
   const printExistingOrder = (order) => {
-    let parsedItems = [];
+    let parsedItems;
     try {
-      let raw = order.items_json;
-      if (typeof raw === 'string') raw = JSON.parse(raw);
-      if (typeof raw === 'string') raw = JSON.parse(raw); 
-      parsedItems = Array.isArray(raw) ? raw : [];
+      parsedItems = parseItems(order.items_json);
     } catch (e) {
       toast.error("Corrupted order data, cannot print.");
       return;
     }
-    
+
     setPrintData({
       title: order.order_type === 'Hotel' ? `Room ${order.hotel_tab?.room_number} Folio` : 'Walk-in Bill',
       subtitle: `Guest: ${order.order_type === 'Hotel' ? order.hotel_tab?.guest_name : order.customer?.name}`,
@@ -353,25 +343,17 @@ export default function Admin() {
 
   const handleHotelCheckout = async (tab, room) => {
     if (!window.confirm(`Check out Room ${room} and generate final bill?`)) return;
-    
+
     const tabOrders = data.orders.filter(o => o.hotel_tab?.id === tab.id && (o.status === 'Completed' || o.status === 'Paid & Preparing'));
     let grandTotal = 0;
     const combinedItems = {};
 
     tabOrders.forEach(o => {
       grandTotal += parseFloat(o.total_amount);
-      try {
-        let items = o.items_json;
-        if (typeof items === 'string') items = JSON.parse(items);
-        if (typeof items === 'string') items = JSON.parse(items);
-        
-        if (Array.isArray(items)) {
-          items.forEach(item => {
-            if (combinedItems[item.name]) combinedItems[item.name].quantity += (item.quantity || 1);
-            else combinedItems[item.name] = { ...item, quantity: item.quantity || 1 };
-          });
-        }
-      } catch(e) { console.error(e) }
+      safeParseItems(o.items_json).forEach(item => {
+        if (combinedItems[item.name]) combinedItems[item.name].quantity += (item.quantity || 1);
+        else combinedItems[item.name] = { ...item, quantity: item.quantity || 1 };
+      });
     });
 
     setPrintData({ title: `Room ${room} Folio`, subtitle: `Guest: ${tab.guest_name}`, items: Object.values(combinedItems), total: grandTotal });
@@ -390,29 +372,17 @@ export default function Admin() {
   }[s] || 'bg-gray-100 text-gray-700');
 
   const hotelRooms = ['101', '102', '103', '104', '105', '106', '107', '108'];
-  
+
   const filteredOrders = data.orders.filter(o => (o.customer?.name || o.hotel_tab?.guest_name || '').toLowerCase().includes(orderSearch.toLowerCase()));
-  
+
   const validOrders = data.orders.filter(o => o.status !== 'Rejected');
   const totalRevenue = validOrders.reduce((sum, order) => sum + parseFloat(order.total_amount || 0), 0);
   const itemCounts = {};
-  
+
   validOrders.forEach(order => {
-    try {
-      let items = order.items_json;
-      if (typeof items === 'string') items = JSON.parse(items);
-      if (typeof items === 'string') items = JSON.parse(items); 
-      
-      if (Array.isArray(items)) {
-        items.forEach(item => { 
-          if (item.name) {
-            itemCounts[item.name] = (itemCounts[item.name] || 0) + (item.quantity || 1); 
-          }
-        });
-      }
-    } catch (e) {
-      console.error("Analytics parsing error:", e);
-    }
+    safeParseItems(order.items_json).forEach(item => {
+      if (item.name) itemCounts[item.name] = (itemCounts[item.name] || 0) + (item.quantity || 1);
+    });
   });
 
   const popularItemsData = Object.keys(itemCounts).map(key => ({ name: key.substring(0, 12) + '...', sales: itemCounts[key] })).sort((a, b) => b.sales - a.sales).slice(0, 6);
@@ -440,7 +410,7 @@ export default function Admin() {
             <p className="text-center mt-12 text-sm italic">Thank you for dining with us!</p>
           </div>
         )}
-        
+
         {printQRs && (
           <div className="max-w-4xl mx-auto font-sans">
             <h2 className="text-center font-bold text-3xl mb-8 tracking-widest border-b-4 border-black pb-4">ROOM SERVICE SCAN CODES</h2>
@@ -497,7 +467,7 @@ export default function Admin() {
 
         <div className="flex-1 overflow-y-auto p-8 lg:p-12 relative">
           <div className="absolute top-0 right-0 w-96 h-96 bg-gold-200/20 rounded-full blur-3xl pointer-events-none" />
-          
+
           {activeTab === 'analytics' && (
             <div className="relative z-10 animate-fade-in">
               <div className="mb-8">
@@ -560,7 +530,7 @@ export default function Admin() {
                   </button>
                 </div>
               </div>
-              
+
               <div className="bg-white rounded-2xl shadow-lg border border-cream-200 overflow-hidden">
                 <table className="w-full text-left border-collapse">
                   <thead className="bg-brown-900 text-gold-400 font-serif">
@@ -570,14 +540,7 @@ export default function Admin() {
                     {filteredOrders.length === 0 ? (
                       <tr><td colSpan="6" className="p-8 text-center text-brown-400">No active orders found.</td></tr>
                     ) : filteredOrders.map(order => {
-                      let items = [];
-                      try {
-                        let raw = order.items_json;
-                        if (typeof raw === 'string') raw = JSON.parse(raw);
-                        if (typeof raw === 'string') raw = JSON.parse(raw);
-                        items = Array.isArray(raw) ? raw : [];
-                      } catch (e) {}
-
+                      const items = safeParseItems(order.items_json);
                       const isHotel = order.order_type === 'Hotel';
                       return (
                         <tr key={order.id} className={`hover:bg-cream-50 transition-colors ${order.status === 'Pending' ? 'bg-amber-50/50' : ''}`}>
@@ -636,7 +599,7 @@ export default function Admin() {
 
               <form onSubmit={handlePOSPrint} className="w-full lg:w-96 bg-white rounded-2xl shadow-lg border border-cream-200 p-6 flex flex-col h-full sticky top-0">
                 <h3 className="font-serif text-xl font-bold text-brown-900 mb-4 border-b border-cream-200 pb-4">Current Bill</h3>
-                
+
                 <div className="mb-4 space-y-3">
                   <input required type="text" pattern="^[A-Za-z\s\-\.]{3,50}$" title="Letters, spaces, hyphens, and dots only (e.g. Mr. Smith)" placeholder="Customer Name" value={posCustomerName} onChange={e => setPosCustomerName(e.target.value)} className="w-full text-sm px-4 py-2 border border-cream-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-gold-400 bg-cream-50" />
                   <input type="tel" pattern="^([6-9]\d{9}|0000000000)?$" title="Valid 10-digit mobile number, or leave as 0000000000" placeholder="Phone Number (Optional)" value={posCustomerPhone} onChange={e => setPosCustomerPhone(e.target.value)} className="w-full text-sm px-4 py-2 border border-cream-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-gold-400 bg-cream-50" />

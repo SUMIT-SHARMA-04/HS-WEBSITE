@@ -1,0 +1,19 @@
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["*/migrations/*"]
+
+[tool.ruff.lint]
+# F = pyflakes (unused imports, undefined names, real bugs)
+# I = isort (import ordering)
+# Deliberately not enabling E501/E701 yet: the existing codebase uses a
+# dense one-liner style (e.g. `if x: return Response(...)`) throughout
+# views.py. Enforcing those now would mean reformatting most of the file
+# for style alone, unrelated to any bug, in one large-diff commit. Turn
+# them on once the codebase has been reformatted on its own.
+select = ["F", "I"]
+
+[tool.black]
+line-length = 120
+target-version = ["py311"]
+extend-exclude = "migrations"
