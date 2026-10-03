@@ -1,5 +1,5 @@
 import { ShoppingBag } from 'lucide-react';
-import { useCart } from '@/context/CartContext';
+import { useCart } from '@/components/context/CartContext';
 import { useState, useEffect } from 'react';
 
 export default function MobileCartFab() {

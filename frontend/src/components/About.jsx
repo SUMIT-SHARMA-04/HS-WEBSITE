@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Leaf, Award } from 'lucide-react';
-import useReveal from '@/hooks/useReveal';
+import useReveal from '@/components/hooks/useReveal';
 
 const tabs = [
   {

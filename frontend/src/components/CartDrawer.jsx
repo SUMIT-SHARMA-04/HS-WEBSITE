@@ -1,11 +1,11 @@
 import { X, Minus, Plus, Loader, CheckCircle2, Clock, ChefHat, CheckSquare, AlertCircle } from 'lucide-react';
-import { useCart } from '@/context/CartContext';
+import { useCart } from '@/components/context/CartContext';
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import FloatingInput from './FloatingInput';
-import useLiveSocket from '@/hooks/useLiveSocket';
-import { API_BASE, WS_BASE } from '@/config/api';
-import { VALID_ROOMS } from '@/config/rooms';
+import useLiveSocket from '@/components/hooks/useLiveSocket';
+import { API_BASE, WS_BASE } from '@/components/config/api';
+import { VALID_ROOMS } from '@/components/config/rooms';
 
 export default function CartDrawer() {
   const { cart, removeFromCart, updateQuantity, isCartOpen, setIsCartOpen, clearCart, hotelRoom } = useCart();

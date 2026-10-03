@@ -9,9 +9,9 @@ import {
   IndianRupee, Bed, Mail, Clock, Star, Volume2, VolumeX, Layers,
   QrCode
 } from 'lucide-react';
-import { parseItems, safeParseItems } from '@/utils/parse';
-import { API_BASE, WS_BASE } from '@/config/api';
-import useLiveSocket from '@/hooks/useLiveSocket';
+import { parseItems, safeParseItems } from '@/components/utils/parse';
+import { API_BASE, WS_BASE } from '@/components/config/api';
+import useLiveSocket from '@/components/hooks/useLiveSocket';
 
 export default function Admin() {
   const navigate = useNavigate();

@@ -1,9 +1,9 @@
 import { Star, Quote, Plus, MessageSquare } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import useReveal from '@/hooks/useReveal';
+import useReveal from '@/components/hooks/useReveal';
 import FloatingInput from './FloatingInput';
-import { API_BASE } from '@/config/api';
+import { API_BASE } from '@/components/config/api';
 
 function Stars({ count, interactive = false, onHover = () => {}, onClick = () => {} }) {
   return (

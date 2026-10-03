@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { UtensilsCrossed } from 'lucide-react';
-import { markAppReady } from '@/utils/appReady';
+import { markAppReady } from '@/components/utils/appReady';
 
 export default function Preloader() {
   const [isLoading, setIsLoading] = useState(true);

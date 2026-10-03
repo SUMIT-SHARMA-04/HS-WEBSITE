@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { isAppReady, onAppReady } from '@/utils/appReady';
+import { isAppReady, onAppReady } from '@/components/utils/appReady';
 
 
 export default function useReveal(deps = []) {

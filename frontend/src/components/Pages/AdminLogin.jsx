@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UtensilsCrossed, Lock, User, Loader } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
-import { API_BASE } from '@/config/api';
+import { API_BASE } from '@/components/config/api';
 
 export default function AdminLogin() {
   const [credentials, setCredentials] = useState({ username: '', password: '' });

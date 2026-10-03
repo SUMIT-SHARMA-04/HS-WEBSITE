@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Calendar, Clock, Users, CheckCircle, XCircle, Loader } from 'lucide-react';
 import toast from 'react-hot-toast';
-import useReveal from '@/hooks/useReveal';
-import useLiveSocket from '@/hooks/useLiveSocket';
+import useReveal from '@/components/hooks/useReveal';
+import useLiveSocket from '@/components/hooks/useLiveSocket';
 import FloatingInput from './FloatingInput';
-import { API_BASE, WS_BASE } from '@/config/api';
+import { API_BASE, WS_BASE } from '@/components/config/api';
 
 const timeSlots = ['12:00 PM', '12:30 PM', '1:00 PM', '1:30 PM', '6:00 PM', '6:30 PM', '7:00 PM', '7:30 PM', '8:00 PM', '8:30 PM', '9:00 PM'];
 const empty = { name: '', email: '', phone: '', date: '', time: '', guests: '2', special_requests: '', policy: '' };

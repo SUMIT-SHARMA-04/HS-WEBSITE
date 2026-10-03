@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Smartphone, UtensilsCrossed, Heart, Star, Users } from 'lucide-react';
 import MagneticButton from './MagneticButton';
-import useReveal from '@/hooks/useReveal';
+import useReveal from '@/components/hooks/useReveal';
 
 const heroStats = [
   { icon: Star, num: '4.9', label: 'Average Rating' },

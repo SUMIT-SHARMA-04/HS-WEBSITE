@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import { API_BASE } from '@/config/api';
-import { VALID_ROOMS } from '@/config/rooms';
+import { API_BASE } from '@/components/config/api';
+import { VALID_ROOMS } from '@/components/config/rooms';
 
 const CartContext = createContext();
 

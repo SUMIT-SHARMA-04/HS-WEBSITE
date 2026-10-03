@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Tag } from 'lucide-react';
-import { useCart } from '@/context/CartContext';
-import { playClickSound, flyToCart, triggerHaptic } from '@/utils/interactions';
-import useReveal from '@/hooks/useReveal';
-import { API_BASE } from '@/config/api';
+import { useCart } from '@/components/context/CartContext';
+import { playClickSound, flyToCart, triggerHaptic } from '@/components/utils/interactions';
+import useReveal from '@/components/hooks/useReveal';
+import { API_BASE } from '@/components/config/api';
 
 export default function Offers() {
   const [combos, setCombos] = useState([]);

@@ -3,8 +3,8 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AlertCircle } from 'lucide-react';
 import Lenis from 'lenis';
 import { Toaster } from 'react-hot-toast';
-import { CartProvider } from './context/CartContext';
-import { VALID_ROOMS } from './config/rooms';
+import { CartProvider } from './components/context/CartContext';
+import { VALID_ROOMS } from './components/config/rooms';
 
 import Preloader from './components/Preloader';
 import CustomCursor from './components/CustomCursor';
@@ -16,9 +16,9 @@ import CartDrawer from './components/CartDrawer';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 
-import Home from './Pages/Home';
-import Admin from './Pages/Admin';
-import AdminLogin from './Pages/AdminLogin';
+import Home from './components/Pages/Home';
+import Admin from './components/Pages/Admin';
+import AdminLogin from './components/Pages/AdminLogin';
 
 function MainLayout() {
   const urlParams = new URLSearchParams(window.location.search);

@@ -10,7 +10,7 @@ import EventPlanning from '@/components/EventPlanning';
 import Reviews from '@/components/Reviews';
 import Contact from '@/components/Contact';
 import Footer from '@/components/Footer';
-import { useCart } from '@/context/CartContext';
+import { useCart } from '@/components/context/CartContext';
 
 export default function Home() {
   const { hotelRoom } = useCart();

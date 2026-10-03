@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { playClickSound } from '@/utils/interactions';
+import { playClickSound } from '@/components/utils/interactions';
 
 export default function MagneticButton({ children, className, onClick, href, type }) {
   const ref = useRef(null);

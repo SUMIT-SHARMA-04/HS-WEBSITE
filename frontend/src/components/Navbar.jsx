@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Menu as MenuIcon, X, ShoppingBag, Bike, Bed } from 'lucide-react';
-import { useCart } from '@/context/CartContext';
+import { useCart } from '@/components/context/CartContext';
 
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);

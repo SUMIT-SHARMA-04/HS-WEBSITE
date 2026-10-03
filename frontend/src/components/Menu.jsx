@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useCart } from "@/context/CartContext";
-import { playClickSound, flyToCart, triggerHaptic } from '@/utils/interactions';
-import { API_BASE } from '@/config/api';
+import { useCart } from "@/components/context/CartContext";
+import { playClickSound, flyToCart, triggerHaptic } from '@/components/utils/interactions';
+import { API_BASE } from '@/components/config/api';
 
 export default function Menu() {
   const [menuData, setMenuData] = useState({});

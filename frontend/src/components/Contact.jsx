@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { MapPin, Phone, Mail, Clock, CheckCircle, Loader, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
-import useReveal from '@/hooks/useReveal';
+import useReveal from '@/components/hooks/useReveal';
 import FloatingInput from './FloatingInput';
-import { API_BASE } from '@/config/api';
+import { API_BASE } from '@/components/config/api';
 
 const info = [
   { icon: MapPin, label: 'Location', lines: ['14 no, Out Side of Surya Hotel Service Line Road, Bypass, Sangam Colony, Jaipur, Rajasthan 302013'] },

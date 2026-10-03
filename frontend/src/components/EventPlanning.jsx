@@ -1,5 +1,5 @@
 import { ArrowRight } from 'lucide-react';
-import useReveal from '@/hooks/useReveal';
+import useReveal from '@/components/hooks/useReveal';
 
 export default function EventPlanning() {
   useReveal();
