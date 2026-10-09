@@ -10,9 +10,11 @@ const heroStats = [
 ];
 
 export default function Hero() {
-  const [mousePos, setMousePos] = useState({ x: -1000, y: -1000 });
   const [isMobile, setIsMobile] = useState(false);
   const heroRef = useRef(null);
+  const spotlightRef = useRef(null);
+  const rafId = useRef(null);
+  const pendingPos = useRef({ x: -1000, y: -1000 });
 
   const bgImage = 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&h=1080&w=1920';
 
@@ -22,15 +24,33 @@ export default function Hero() {
     if (typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches) {
       setIsMobile(true);
     }
+    return () => { if (rafId.current) cancelAnimationFrame(rafId.current); };
   }, []);
 
+  // Writes clip-path straight to the DOM instead of going through React
+  // state — avoids re-rendering the whole Hero on every mouse pixel.
+  // That alone isn't enough, though: mousemove can fire far more often
+  // than the screen can paint, and clip-path is an expensive property to
+  // mutate. requestAnimationFrame caps the actual DOM write to at most
+  // once per frame no matter how many mousemove events arrive in between.
   const handleMouseMove = (e) => {
     if (isMobile || !heroRef.current) return;
     const { left, top } = heroRef.current.getBoundingClientRect();
-    setMousePos({ x: e.clientX - left, y: e.clientY - top });
+    pendingPos.current = { x: e.clientX - left, y: e.clientY - top };
+    if (rafId.current) return;
+    rafId.current = requestAnimationFrame(() => {
+      if (spotlightRef.current) {
+        const { x, y } = pendingPos.current;
+        spotlightRef.current.style.clipPath = `circle(220px at ${x}px ${y}px)`;
+      }
+      rafId.current = null;
+    });
   };
 
-  const handleMouseLeave = () => setMousePos({ x: -1000, y: -1000 });
+  const handleMouseLeave = () => {
+    pendingPos.current = { x: -1000, y: -1000 };
+    if (spotlightRef.current) spotlightRef.current.style.clipPath = 'circle(220px at -1000px -1000px)';
+  };
 
   return (
     <section
@@ -51,13 +71,14 @@ export default function Hero() {
       {/* Circular spotlight that follows the cursor, revealing the full-color image underneath */}
       {!isMobile && (
         <div
-          className="absolute inset-0 z-0 pointer-events-none transition-[clip-path] duration-75 ease-out"
+          ref={spotlightRef}
+          className="absolute inset-0 z-0 pointer-events-none"
           style={{
             backgroundImage: `url(${bgImage})`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             opacity: 0.65,
-            clipPath: `circle(220px at ${mousePos.x}px ${mousePos.y}px)`,
+            clipPath: 'circle(220px at -1000px -1000px)',
           }}
         >
           <div className="absolute inset-0 shadow-[inset_0_0_60px_rgba(26,13,6,0.9)]" />

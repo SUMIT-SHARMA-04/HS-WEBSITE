@@ -2,10 +2,22 @@ import { useEffect, useState } from 'react';
 import { UtensilsCrossed } from 'lucide-react';
 import { markAppReady } from '@/components/utils/appReady';
 
+// Only replays the full loading sequence once per browser session — without
+// this, navigating from /admin back to "/" remounts this component and
+// replays the whole loading screen on every internal SPA navigation, not
+// just the real first load.
+const ALREADY_LOADED_KEY = 'hsc_preloaded';
+
 export default function Preloader() {
-  const [isLoading, setIsLoading] = useState(true);
+  const alreadyLoaded = typeof window !== 'undefined' && sessionStorage.getItem(ALREADY_LOADED_KEY) === 'true';
+  const [isLoading, setIsLoading] = useState(!alreadyLoaded);
 
   useEffect(() => {
+    if (alreadyLoaded) {
+      markAppReady();
+      return;
+    }
+
     document.body.style.overflow = 'hidden';
 
     const finishLoading = () => {
@@ -13,6 +25,7 @@ export default function Preloader() {
         setIsLoading(false);
         document.body.style.overflow = 'auto';
         markAppReady();
+        sessionStorage.setItem(ALREADY_LOADED_KEY, 'true');
       }, 800);
     };
 
@@ -26,7 +39,10 @@ export default function Preloader() {
         clearTimeout(failsafe);
       };
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  if (alreadyLoaded) return null;
 
   return (
     <div

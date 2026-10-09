@@ -57,8 +57,8 @@
 
 .glass-panel {
   background: rgba(26, 13, 6, 0.45);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border-bottom: 1px solid rgba(212, 168, 65, 0.15);
 }
 
@@ -132,22 +132,26 @@
   transform: translateX(0) translateY(0) !important;
 }
 
-/* Menu card deal-in animation */
+/* Menu card fade-in — deliberately cheap: opacity + a small translate only,
+   no scale, short duration. This runs on every category switch, and on a
+   low-end device a grid full of simultaneously-animating elements is the
+   kind of thing that drops frames, so this stays minimal on purpose. */
 @keyframes dealCard {
-  0% { opacity: 0; transform: translateY(28px) scale(0.98); }
-  100% { opacity: 1; transform: translateY(0) scale(1); }
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
 }
-.animate-deal-card { opacity: 0; will-change: transform, opacity; animation: dealCard 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+.animate-deal-card { opacity: 0; animation: dealCard 0.35s ease-out forwards; }
 
 /* Micro-interactions & loading states */
-@keyframes shimmerWave { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-.skeleton-card { background: linear-gradient(90deg, #fbf7ee 25%, #f5ddb8 50%, #fbf7ee 75%); background-size: 200% 100%; animation: shimmerWave 2s infinite linear; border-radius: 0px; }
+/* Skeleton loading state: a plain opacity pulse (GPU-composited) instead of sweeping a gradient via background-position, which forces a repaint every frame — and on a cold-started backend these can stay on screen for a long time. */
+@keyframes skeletonPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+.skeleton-card { background: #f5ebd8; animation: skeletonPulse 1.6s ease-in-out infinite; border-radius: 0px; }
 @keyframes slideInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 .animate-cascade { opacity: 0; animation: slideInUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
 @keyframes progress { 0% { transform: scaleX(0); } 100% { transform: scaleX(1); } }
 .animate-progress { animation: progress 2.2s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
 @keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
-.animate-marquee { display: flex; width: max-content; animation: marquee 25s linear infinite; }
+.animate-marquee { display: flex; width: max-content; animation: marquee 25s linear infinite; animation-play-state: var(--anim-play-state, running); }
 .animate-marquee:hover { animation-play-state: paused; }
 @keyframes orderEatEnjoy { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.5; } 50% { transform: translateY(-8px) scale(1.1); opacity: 1; color: #d4a841; } }
 .animate-story-1 { animation: orderEatEnjoy 3s ease-in-out infinite 0s; }
@@ -169,6 +173,7 @@
   z-index: 0;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.4'/%3E%3C/svg%3E");
   animation: grainMove 6s steps(4) infinite;
+  animation-play-state: var(--anim-play-state, running);
 }
 
 @keyframes floatAurora {
@@ -179,9 +184,10 @@
 .aurora-orb {
   position: absolute;
   border-radius: 50%;
-  filter: blur(90px);
+  filter: blur(64px);
   opacity: 0.4;
   animation: floatAurora 12s ease-in-out infinite;
+  animation-play-state: var(--anim-play-state, running);
   pointer-events: none;
   z-index: 0;
 }
@@ -189,18 +195,21 @@
 .aurora-orb-2 { background: #8b5a3e; width: 350px; height: 350px; animation-delay: -4s; }
 
 @keyframes gridPan {
-  0% { background-position: 0 0; }
-  100% { background-position: 40px 40px; }
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(40px, 40px); }
 }
 .bg-animated-grid {
   position: absolute;
-  inset: 0;
+  /* overhangs its container by one tile on each edge so the transform-based
+     pan below never reveals a gap at the border */
+  inset: -40px;
   background-size: 40px 40px;
   pointer-events: none;
   z-index: 0;
   background-image: linear-gradient(to right, rgba(212, 168, 65, 0.05) 1px, transparent 1px),
                     linear-gradient(to bottom, rgba(212, 168, 65, 0.05) 1px, transparent 1px);
   animation: gridPan 10s linear infinite;
+  animation-play-state: var(--anim-play-state, running);
 }
 
 /* Respect OS-level "reduce motion" — content still appears (just without

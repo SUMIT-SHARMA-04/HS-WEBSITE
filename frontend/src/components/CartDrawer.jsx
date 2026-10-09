@@ -5,7 +5,10 @@ import toast from 'react-hot-toast';
 import FloatingInput from './FloatingInput';
 import useLiveSocket from '@/components/hooks/useLiveSocket';
 import { API_BASE, WS_BASE } from '@/components/config/api';
+import { RAZORPAY_KEY_ID } from '@/components/config/razorpay';
+import { loadRazorpayScript } from '@/components/utils/loadRazorpayScript';
 import { VALID_ROOMS } from '@/components/config/rooms';
+import { extractErrorMessage } from '@/components/utils/errors';
 
 export default function CartDrawer() {
   const { cart, removeFromCart, updateQuantity, isCartOpen, setIsCartOpen, clearCart, hotelRoom } = useCart();
@@ -15,6 +18,7 @@ export default function CartDrawer() {
   const [liveOrderId, setLiveOrderId] = useState(null);
   const [orderStatus, setOrderStatus] = useState('');
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+  const [payingOnline, setPayingOnline] = useState(false);
 
   useEffect(() => {
     if (!isCartOpen) return;
@@ -52,6 +56,66 @@ export default function CartDrawer() {
     { enabled: isTracking, restartKey: liveOrderId }
   );
 
+  useEffect(() => {
+    if (RAZORPAY_KEY_ID && orderStatus === 'Accepted' && !isHotelGuest) {
+      loadRazorpayScript();
+    }
+  }, [orderStatus, isHotelGuest]);
+
+  const handlePayOnline = async () => {
+    setPayingOnline(true);
+    try {
+      const loaded = await loadRazorpayScript();
+      if (!loaded || !window.Razorpay) {
+        toast.error('Could not load the payment gateway. Please try again or pay at the counter.');
+        return;
+      }
+
+      const res = await fetch(`${API_BASE}/orders/${liveOrderId}/create-payment/`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) { toast.error(extractErrorMessage(data, 'Could not start payment.')); return; }
+
+      const rzp = new window.Razorpay({
+        key: data.key || RAZORPAY_KEY_ID,
+        amount: data.amount,
+        currency: data.currency || 'INR',
+        order_id: data.razorpay_order_id,
+        name: 'High Spirits Cafe',
+        description: `Order #${liveOrderId.substring(0, 8)}`,
+        prefill: { name: customerDetails.name, contact: customerDetails.phone },
+        theme: { color: '#d4a841' },
+        handler: async (response) => {
+          try {
+            const verifyRes = await fetch(`${API_BASE}/orders/${liveOrderId}/verify-payment/`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              }),
+            });
+            if (verifyRes.ok) {
+              toast.success('Payment confirmed!');
+              setOrderStatus('Paid & Preparing');
+            } else {
+              toast.error('Payment could not be verified. Please show this screen at the counter.');
+            }
+          } catch (e) {
+            toast.error('Network error confirming payment. Please show this screen at the counter.');
+          }
+        },
+      });
+
+      rzp.on('payment.failed', () => toast.error('Payment failed. Please try again.'));
+      rzp.open();
+    } catch (error) {
+      toast.error('Could not start payment. Please try again.');
+    } finally {
+      setPayingOnline(false);
+    }
+  };
+
   const handlePlaceOrder = async (e) => {
     e.preventDefault();
     if (isHotelGuest && !VALID_ROOMS.includes(roomNumber)) return toast.error(`Invalid Room.`);
@@ -83,22 +147,14 @@ export default function CartDrawer() {
     try {
       const response = await fetch(`${API_BASE}/orders/checkout/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const data = await response.json();
-      if (!response.ok) { toast.error(data.error || 'Failed to place order'); setCheckoutStatus('idle'); return; }
+      if (!response.ok) { toast.error(extractErrorMessage(data, 'Failed to place order')); setCheckoutStatus('idle'); return; }
       setLiveOrderId(data.order_id); setOrderStatus(data.status); setCheckoutStatus('tracking'); setShowCheckoutForm(false); clearCart(); setCustomerDetails({ name: '', phone: '' }); localStorage.setItem('my_active_order', data.order_id); setIdempotencyKey(crypto.randomUUID()); toast.success("Order sent to kitchen!");
     } catch (error) { toast.error('Network error. Please try again.'); setCheckoutStatus('idle'); }
   };
 
-  const handleConfirmOrder = async () => {
-    try {
-      const response = await fetch(`${API_BASE}/orders/${liveOrderId}/status/`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'Paid & Preparing' }) });
-      if (response.ok) { setOrderStatus('Paid & Preparing'); toast.success("Order confirmed!"); }
-      else toast.error("Failed to confirm order.");
-    } catch (error) { toast.error("Network error."); }
-  };
-
   const closeTracker = () => { setCheckoutStatus('idle'); setLiveOrderId(null); setOrderStatus(''); setIsCartOpen(false); setCustomerDetails({ name: '', phone: '' }); localStorage.removeItem('my_active_order'); };
 
-  const trackerSteps = [{ id: 'Pending', label: 'Order Placed', desc: 'Awaiting kitchen confirmation', icon: Clock }, { id: 'Accepted', label: 'Order Accepted', desc: isHotelGuest ? 'Billed to room. Preparing food.' : 'Please confirm to begin preparation', icon: CheckSquare }, { id: 'Paid & Preparing', label: 'Preparing Food', desc: 'Our chefs are cooking your meal', icon: ChefHat }, { id: 'Completed', label: 'Ready / Delivered', desc: 'Enjoy your meal!', icon: CheckCircle2 }];
+  const trackerSteps = [{ id: 'Pending', label: 'Order Placed', desc: 'Awaiting kitchen confirmation', icon: Clock }, { id: 'Accepted', label: 'Order Accepted', desc: isHotelGuest ? 'Billed to room. Preparing food.' : 'Pay online, or at the counter', icon: CheckSquare }, { id: 'Paid & Preparing', label: 'Preparing Food', desc: 'Our chefs are cooking your meal', icon: ChefHat }, { id: 'Completed', label: 'Ready / Delivered', desc: 'Enjoy your meal!', icon: CheckCircle2 }];
 
   const getStepState = (stepIndex) => {
     const sequence = ['Pending', 'Accepted', 'Paid & Preparing', 'Completed'];
@@ -161,11 +217,21 @@ export default function CartDrawer() {
               {orderStatus === 'Accepted' && !isHotelGuest && (
                 <div className="mt-12 bg-brown-950 p-8 text-center shadow-xl animate-slow-in-view">
                   <p className="text-gold-400 font-bold mb-3 text-xs uppercase tracking-widest">Kitchen Approved</p>
-                  <p className="text-xs text-white/60 mb-6 leading-relaxed font-light">
-                    Your order has been reviewed. Click below to confirm and we will begin preparation.
-                    <br/><br/><strong className="text-gold-400 font-normal">Payment will be collected at the counter.</strong>
-                  </p>
-                  <button onClick={handleConfirmOrder} className="w-full bg-gold-500 text-brown-950 py-4 font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-gold-400 transition-colors active-scale"><ChefHat className="w-4 h-4" /> Start Cooking</button>
+                  {RAZORPAY_KEY_ID ? (
+                    <>
+                      <p className="text-xs text-white/60 mb-6 leading-relaxed font-light">
+                        Your order has been reviewed. Pay online to send it to the kitchen.
+                      </p>
+                      <button onClick={handlePayOnline} disabled={payingOnline} className="w-full bg-gold-500 text-brown-950 py-4 font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-gold-400 transition-colors active-scale disabled:opacity-50">
+                        {payingOnline ? <><Loader className="w-4 h-4 animate-spin" /> Opening Payment...</> : 'Pay Now'}
+                      </button>
+                    </>
+                  ) : (
+                    <p className="text-xs text-white/60 leading-relaxed font-light">
+                      Your order has been reviewed. Please pay at the counter — our staff will confirm your
+                      order and the kitchen will begin preparation shortly.
+                    </p>
+                  )}
                 </div>
               )}
               <button onClick={closeTracker} className="mt-16 mx-auto block text-[10px] text-brown-400 uppercase tracking-widest font-bold border-b border-transparent hover:border-brown-400 transition-all pb-1">Dismiss Tracker</button>

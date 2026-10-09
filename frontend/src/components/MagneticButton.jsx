@@ -1,19 +1,26 @@
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 import { playClickSound } from '@/components/utils/interactions';
 
 export default function MagneticButton({ children, className, onClick, href, type }) {
   const ref = useRef(null);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const innerRef = useRef(null);
 
+  // Writes transform straight to the DOM instead of React state, so
+  // following the cursor doesn't re-render this component on every
+  // mousemove over the button.
   const handleMouse = (e) => {
     const { clientX, clientY } = e;
     const { height, width, left, top } = ref.current.getBoundingClientRect();
-    const middleX = clientX - (left + width / 2);
-    const middleY = clientY - (top + height / 2);
-    setPosition({ x: middleX * 0.3, y: middleY * 0.3 });
+    const x = (clientX - (left + width / 2)) * 0.3;
+    const y = (clientY - (top + height / 2)) * 0.3;
+    if (ref.current) ref.current.style.transform = `translate(${x}px, ${y}px)`;
+    if (innerRef.current) innerRef.current.style.transform = `translate(${x * 0.2}px, ${y * 0.2}px)`;
   };
 
-  const reset = () => setPosition({ x: 0, y: 0 });
+  const reset = () => {
+    if (ref.current) ref.current.style.transform = 'translate(0px, 0px)';
+    if (innerRef.current) innerRef.current.style.transform = 'translate(0px, 0px)';
+  };
 
   const handleClick = (e) => {
     playClickSound();
@@ -31,12 +38,8 @@ export default function MagneticButton({ children, className, onClick, href, typ
       onMouseMove={handleMouse}
       onMouseLeave={reset}
       className={`relative inline-flex items-center justify-center transition-transform duration-300 ease-out active-scale ${className}`}
-      style={{ transform: `translate(${position.x}px, ${position.y}px)` }}
     >
-      <span
-        className="transition-transform duration-300 ease-out inline-flex items-center gap-2"
-        style={{ transform: `translate(${position.x * 0.2}px, ${position.y * 0.2}px)` }}
-      >
+      <span ref={innerRef} className="transition-transform duration-300 ease-out inline-flex items-center gap-2">
         {children}
       </span>
     </Component>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useCart } from "@/components/context/CartContext";
 import { playClickSound, flyToCart, triggerHaptic } from '@/components/utils/interactions';
 import { API_BASE } from '@/components/config/api';
+import usePauseOffscreen from '@/components/hooks/usePauseOffscreen';
 
 export default function Menu() {
   const [menuData, setMenuData] = useState({});
@@ -10,6 +11,7 @@ export default function Menu() {
   const [loadError, setLoadError] = useState(false);
   const [animatingBtn, setAnimatingBtn] = useState(null);
   const { addToCart } = useCart();
+  const sectionRef = usePauseOffscreen();
 
   const fetchMenu = async () => {
     setLoading(true);
@@ -51,7 +53,7 @@ export default function Menu() {
   const items = menuData[activeCategory] || [];
 
   return (
-    <section id="menu" className="py-32 bg-cream-100 relative overflow-hidden">
+    <section id="menu" ref={sectionRef} className="py-32 bg-cream-100 relative overflow-hidden">
       <div className="bg-grain" />
 
       <div className="max-w-7xl mx-auto px-4 md:px-6 relative z-10">
@@ -84,7 +86,7 @@ export default function Menu() {
           </div>
         ) : (
           <>
-            <div className="sticky top-[72px] z-30 bg-cream-100/90 backdrop-blur-xl py-4 border-b border-cream-200 mb-8 -mx-4 px-4 md:mx-0 md:px-0">
+            <div className="sticky top-[72px] z-30 bg-cream-100/90 backdrop-blur-sm py-4 border-b border-cream-200 mb-8 -mx-4 px-4 md:mx-0 md:px-0">
               <div className="flex overflow-x-auto hide-scrollbar gap-3 w-full pb-2 md:pb-0 snap-x snap-mandatory">
                 {categories.map((cat) => (
                   <button
@@ -109,8 +111,8 @@ export default function Menu() {
                 items.map((item, i) => (
                   <div
                     key={item.id}
-                    style={{ animationDelay: `${Math.min(i, 8) * 80}ms` }}
-                    className={`animate-deal-card bg-white rounded-none overflow-hidden shadow-[0_4px_20px_rgba(38,19,9,0.02)] hover:shadow-[0_15px_40px_rgba(38,19,9,0.08)] transition-all duration-500 flex flex-col border border-cream-200 group ${
+                    style={{ animationDelay: `${Math.min(i, 6) * 30}ms` }}
+                    className={`animate-deal-card bg-white rounded-none overflow-hidden shadow-[0_4px_20px_rgba(38,19,9,0.02)] hover:shadow-[0_10px_24px_rgba(38,19,9,0.08)] transition-shadow duration-300 flex flex-col border border-cream-200 group ${
                       !item.is_available ? 'opacity-50' : ''
                     }`}
                   >
@@ -118,7 +120,7 @@ export default function Menu() {
                       <img
                         src={item.img}
                         alt={item.name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ease-out"
                         loading="lazy"
                         decoding="async"
                       />

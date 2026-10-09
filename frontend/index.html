@@ -8,12 +8,45 @@
     <meta property="og:title" content="High Spirits Cafe" />
     <meta property="og:description" content="Pure vegetarian fine dining in Jaipur — menu, table booking, and in-room ordering." />
     <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=1200" />
     <meta name="theme-color" content="#1a0d06" />
     <!-- Your Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
-    <!-- Razorpay's checkout.js was removed from here: nothing in the app
-         currently calls it (see README §13). Load it only inside the
-         checkout component once the online-payment flow is wired up. -->
+    <!-- Razorpay's checkout.js is intentionally NOT loaded here — it's
+         loaded dynamically (src/utils/loadRazorpayScript.js) only when a
+         guest actually reaches the Pay Now step, so pages that never touch
+         checkout (like /admin) don't load it for nothing. -->
+
+    <!-- Structured data for local search / Google Business results.
+         Mirrors the same address, phone, and hours already shown publicly
+         in Footer.jsx and Contact.jsx — keep these in sync if they change. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Restaurant",
+      "name": "High Spirits Cafe",
+      "image": "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=1200",
+      "servesCuisine": ["Indian", "Vegetarian"],
+      "priceRange": "₹₹",
+      "acceptsReservations": "True",
+      "telephone": "+91 9182074513",
+      "email": "highspiritscafe99@gmail.com",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "14, Outside Surya Hotel, Service Line Road, Bypass, Sangam Colony",
+        "addressLocality": "Jaipur",
+        "addressRegion": "Rajasthan",
+        "postalCode": "302013",
+        "addressCountry": "IN"
+      },
+      "openingHoursSpecification": {
+        "@type": "OpeningHoursSpecification",
+        "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+        "opens": "09:00",
+        "closes": "22:00"
+      }
+    }
+    </script>
   </head>
   <body>
     <!-- React injects the entire App inside this div -->

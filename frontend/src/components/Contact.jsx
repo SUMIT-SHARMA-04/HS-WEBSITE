@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { MapPin, Phone, Mail, Clock, CheckCircle, Loader, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
 import useReveal from '@/components/hooks/useReveal';
+import usePauseOffscreen from '@/components/hooks/usePauseOffscreen';
 import FloatingInput from './FloatingInput';
 import { API_BASE } from '@/components/config/api';
+import { extractErrorMessage } from '@/components/utils/errors';
 
 const info = [
   { icon: MapPin, label: 'Location', lines: ['14 no, Out Side of Surya Hotel Service Line Road, Bypass, Sangam Colony, Jaipur, Rajasthan 302013'] },
@@ -17,6 +19,7 @@ export default function Contact() {
   const [status, setStatus] = useState('idle');
 
   useReveal();
+  const sectionRef = usePauseOffscreen();
 
   function set(field, val) { setForm((f) => ({ ...f, [field]: val })); }
 
@@ -25,13 +28,18 @@ export default function Contact() {
     setStatus('loading');
     try {
       const response = await fetch(`${API_BASE}/contact/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
-      if (!response.ok) throw new Error('Failed to send message');
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        toast.error(extractErrorMessage(data, 'Failed to send message.'));
+        setStatus('idle');
+        return;
+      }
       setStatus('success'); setForm({ name: '', email: '', message: '' });
-    } catch (err) { toast.error('Failed to send message.'); setStatus('idle'); }
+    } catch (err) { toast.error('Network error. Please try again.'); setStatus('idle'); }
   }
 
   return (
-    <section id="contact" className="py-32 bg-brown-950 relative overflow-hidden">
+    <section id="contact" ref={sectionRef} className="py-32 bg-brown-950 relative overflow-hidden">
       <div className="bg-animated-grid" />
 
       <div className="max-w-7xl mx-auto px-6 relative z-10">

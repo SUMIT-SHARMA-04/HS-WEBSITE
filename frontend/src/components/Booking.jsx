@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react';
 import { Calendar, Clock, Users, CheckCircle, XCircle, Loader } from 'lucide-react';
 import toast from 'react-hot-toast';
 import useReveal from '@/components/hooks/useReveal';
+import usePauseOffscreen from '@/components/hooks/usePauseOffscreen';
 import useLiveSocket from '@/components/hooks/useLiveSocket';
 import FloatingInput from './FloatingInput';
 import { API_BASE, WS_BASE } from '@/components/config/api';
+import { extractErrorMessage } from '@/components/utils/errors';
 
 const timeSlots = ['12:00 PM', '12:30 PM', '1:00 PM', '1:30 PM', '6:00 PM', '6:30 PM', '7:00 PM', '7:30 PM', '8:00 PM', '8:30 PM', '9:00 PM'];
 const empty = { name: '', email: '', phone: '', date: '', time: '', guests: '2', special_requests: '', policy: '' };
@@ -51,6 +53,7 @@ export default function Booking() {
   );
 
   useReveal([bookingStatus]);
+  const sectionRef = usePauseOffscreen();
 
   function set(field, value) { setForm((f) => ({ ...f, [field]: value })); }
 
@@ -63,11 +66,15 @@ export default function Booking() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ customer_name: form.name, email: form.email, customer_phone: form.phone, date: form.date, time: form.time, guests: parseInt(form.guests, 10), special_requests: combinedRequests, status: 'Pending' }),
       });
-      if (!response.ok) throw new Error('Failed to book table');
-      const data = await response.json();
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        toast.error(extractErrorMessage(data, 'Booking failed. Please call us directly.'));
+        setBookingStatus('idle');
+        return;
+      }
       setLiveBookingId(data.id); setLiveStatus(data.status); localStorage.setItem('my_active_booking', data.id);
       setBookingStatus('tracking'); setForm(empty);
-    } catch (err) { toast.error('Booking failed. Please call us directly.'); setBookingStatus('idle'); }
+    } catch (err) { toast.error('Network error. Please call us directly.'); setBookingStatus('idle'); }
   }
 
   const closeTracker = () => { setBookingStatus('idle'); localStorage.removeItem('my_active_booking'); };
@@ -91,7 +98,7 @@ export default function Booking() {
   }
 
   return (
-    <section id="book" className="py-32 bg-cream-100 overflow-hidden relative">
+    <section id="book" ref={sectionRef} className="py-32 bg-cream-100 overflow-hidden relative">
       <div className="bg-animated-grid" />
 
       <div className="max-w-7xl mx-auto px-6 relative z-10">

@@ -3,6 +3,7 @@ import { Tag } from 'lucide-react';
 import { useCart } from '@/components/context/CartContext';
 import { playClickSound, flyToCart, triggerHaptic } from '@/components/utils/interactions';
 import useReveal from '@/components/hooks/useReveal';
+import usePauseOffscreen from '@/components/hooks/usePauseOffscreen';
 import { API_BASE } from '@/components/config/api';
 
 export default function Offers() {
@@ -30,6 +31,7 @@ export default function Offers() {
   }, []);
 
   useReveal([loading, combos]);
+  const sectionRef = usePauseOffscreen();
 
   const handleAddToCart = (e, combo) => {
     playClickSound();
@@ -43,7 +45,7 @@ export default function Offers() {
   if (!loading && combos.length === 0) return null;
 
   return (
-    <section id="combos" className="py-32 bg-cream-50 relative overflow-hidden">
+    <section id="combos" ref={sectionRef} className="py-32 bg-cream-50 relative overflow-hidden">
       <div className="aurora-orb aurora-orb-1 top-0 left-0 -translate-x-1/2 -translate-y-1/2" />
       <div className="aurora-orb aurora-orb-2 bottom-0 right-0 translate-x-1/3 translate-y-1/3" />
 
@@ -78,7 +80,7 @@ export default function Offers() {
                     <img
                       src={combo.img}
                       alt={combo.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
                     <div className="absolute top-4 left-4 bg-brown-950 text-gold-400 text-[10px] font-bold px-3 py-1.5 uppercase tracking-widest">
                       Special Value

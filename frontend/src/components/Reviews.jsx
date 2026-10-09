@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import useReveal from '@/components/hooks/useReveal';
 import FloatingInput from './FloatingInput';
 import { API_BASE } from '@/components/config/api';
+import { extractErrorMessage } from '@/components/utils/errors';
 
 function Stars({ count, interactive = false, onHover = () => {}, onClick = () => {} }) {
   return (
@@ -48,9 +49,14 @@ export default function Reviews() {
   const handleSubmitReview = async (e) => {
     e.preventDefault();
     try {
-      await fetch(`${API_BASE}/reviews/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newReview) });
+      const res = await fetch(`${API_BASE}/reviews/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newReview) });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        toast.error(extractErrorMessage(data, 'Could not submit your review.'));
+        return;
+      }
       setShowForm(false); setNewReview({ name: '', role: '', text: '', rating: 5 }); toast.success("Thank you! Review submitted for approval.");
-    } catch (e) { toast.error("Error submitting review."); }
+    } catch (e) { toast.error("Network error. Please try again."); }
   };
 
   return (
@@ -79,7 +85,7 @@ export default function Reviews() {
             {reviewList.map((r, i) => (
               <div
                 key={r.id || i}
-                className="sticky top-[12vh] md:top-[15vh] w-full min-h-[40vh] bg-cream-50 rounded-t-[2rem] shadow-[0_-15px_40px_rgba(0,0,0,0.3)] p-8 md:p-14 flex flex-col mb-16 last:mb-0 border-t border-cream-200"
+                className="sticky top-[12vh] md:top-[15vh] w-full min-h-[40vh] bg-cream-50 rounded-t-[2rem] shadow-[0_-8px_20px_rgba(0,0,0,0.25)] p-8 md:p-14 flex flex-col mb-16 last:mb-0 border-t border-cream-200"
                 style={{ zIndex: i }}
               >
                 <Quote className="w-10 h-10 text-gold-400 mb-8 shrink-0" />

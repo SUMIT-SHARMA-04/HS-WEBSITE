@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Leaf, Award } from 'lucide-react';
 import useReveal from '@/components/hooks/useReveal';
 
@@ -25,6 +25,7 @@ export default function About() {
   const [active, setActive] = useState('veg');
   const current = tabs.find((t) => t.key === active);
   const [autoplayVideo, setAutoplayVideo] = useState(true);
+  const videoRef = useRef(null);
 
   useReveal();
 
@@ -33,6 +34,20 @@ export default function About() {
       setAutoplayVideo(false);
     }
   }, []);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !autoplayVideo) return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) video.play().catch(() => {});
+        else video.pause();
+      },
+      { threshold: 0.1 }
+    );
+    io.observe(video);
+    return () => { io.disconnect(); video.pause(); };
+  }, [autoplayVideo]);
 
   return (
     <section id="about" className="py-24 md:py-32 bg-cream-50 relative overflow-hidden">
@@ -43,13 +58,15 @@ export default function About() {
             <div className="relative h-full" style={{ flex: '1.6' }}>
               <div className="absolute inset-0 border border-gold-400/30 translate-x-3 translate-y-3 md:translate-x-4 md:translate-y-4" />
               <video
-                autoPlay={autoplayVideo}
+                ref={videoRef}
                 loop={autoplayVideo}
                 muted
                 playsInline
+                preload="none"
                 poster="https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=800"
                 className="relative z-10 w-full h-full object-cover shadow-2xl bg-brown-950"
               >
+                <source src="https://videos.pexels.com/video-files/8522928/8522928-sd_540_960_25fps.mp4" type="video/mp4" />
                 <source src="https://videos.pexels.com/video-files/8522928/8522928-uhd_2160_3840_25fps.mp4" type="video/mp4" />
               </video>
             </div>
