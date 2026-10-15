@@ -35,6 +35,11 @@ export default function About() {
     }
   }, []);
 
+  // Play only while the video is actually on screen. It used to autoplay on
+  // page load and loop forever — decoding video the whole time, even after
+  // the user had scrolled well past it. That's one of the heaviest things
+  // a low-end device can be asked to do, so it now starts when scrolled
+  // into view and pauses (stops decoding) when scrolled away.
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !autoplayVideo) return;
@@ -66,6 +71,9 @@ export default function About() {
                 poster="https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=800"
                 className="relative z-10 w-full h-full object-cover shadow-2xl bg-brown-950"
               >
+                {/* Smaller rendition first (this panel is only a few hundred px wide, so
+                    a 4K stream is wasted decode work); the browser falls through to the
+                    original file below if the first URL doesn't resolve. */}
                 <source src="https://videos.pexels.com/video-files/8522928/8522928-sd_540_960_25fps.mp4" type="video/mp4" />
                 <source src="https://videos.pexels.com/video-files/8522928/8522928-uhd_2160_3840_25fps.mp4" type="video/mp4" />
               </video>
